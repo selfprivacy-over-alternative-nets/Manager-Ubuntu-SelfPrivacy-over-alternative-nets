@@ -51,6 +51,7 @@ tor -f /tmp/user-torrc &
 ### Step 3: Run Flutter App
 
 ```bash
+# From the root of this repo:
 cd flutter-app/selfprivacy.org.app
 flutter pub get
 flutter run -d linux --verbose 2>&1 | tee /tmp/app.log
