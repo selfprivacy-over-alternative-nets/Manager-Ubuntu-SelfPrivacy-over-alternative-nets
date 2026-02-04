@@ -243,11 +243,42 @@
           experimental-features = [ "nix-command" "flakes" ];
         };
 
-        # Required directories
+        # Required directories and files for SelfPrivacy API
         systemd.tmpfiles.rules = [
           "d /var/lib/selfprivacy 0755 root root - -"
           "d /etc/nixos 0755 root root - -"
+          "d /etc/selfprivacy 0755 root root - -"
         ];
+
+        # Create minimal config files for SelfPrivacy API
+        environment.etc."selfprivacy/secrets.json" = {
+          text = builtins.toJSON {
+            api = {
+              token = "test-token-for-tor-development";
+            };
+          };
+          mode = "0600";
+        };
+
+        environment.etc."selfprivacy/userdata.json" = {
+          text = builtins.toJSON {
+            username = "admin";
+            hashedPassword = "";
+            sshKeys = [];
+            dns = {
+              provider = "NONE";
+            };
+            server = {
+              provider = "NONE";
+            };
+            domain = "test.onion";
+            autoUpgrade = {
+              enable = false;
+            };
+            timezone = "UTC";
+          };
+          mode = "0644";
+        };
       };
     in
     {
