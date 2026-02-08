@@ -220,7 +220,8 @@
             };
 
             # Jitsi Meet static files - served from the jitsi-meet package
-            locations."/jitsi" = {
+            # Note: Both location and alias must end with / to prevent path traversal
+            locations."/jitsi/" = {
               alias = "${pkgs.jitsi-meet}/";
               index = "index.html";
             };
