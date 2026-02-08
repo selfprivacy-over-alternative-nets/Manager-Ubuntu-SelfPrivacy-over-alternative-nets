@@ -611,6 +611,17 @@
           mode = "0600";
         };
 
+        # The SelfPrivacy API's FlakeServiceManager expects this file
+        environment.etc."nixos/sp-modules/flake.nix" = {
+          text = ''
+            {
+              description = "SelfPrivacy NixOS PoC modules/extensions/bundles/packages/etc";
+              outputs = _: { };
+            }
+          '';
+          mode = "0644";
+        };
+
         environment.etc."nixos/userdata.json" = {
           text = builtins.toJSON {
             username = "admin";
