@@ -1,13 +1,45 @@
 # SelfPrivacy NixOS Backend over Tor (VirtualBox)
 
-This folder contains the NixOS configuration to deploy a SelfPrivacy backend accessible via Tor hidden service (.onion address) in VirtualBox.
+This folder contains the NixOS configuration to deploy a full SelfPrivacy backend accessible via Tor hidden service (.onion address) in VirtualBox.
 
 ## What This Does
 
 - Deploys the **real** SelfPrivacy GraphQL API (fetched from upstream)
-- Configures Tor hidden service to expose the API via .onion address
+- Configures Tor hidden service to expose all services via .onion address
 - Sets up Redis, Nginx, and all required services
 - Runs in VirtualBox on Ubuntu (or any Linux host)
+
+## Integrated Services
+
+The following services are pre-configured and accessible via path-based routing on your .onion address:
+
+| Service | Path | Description |
+|---------|------|-------------|
+| **SelfPrivacy API** | `/graphql`, `/api` | Core GraphQL and REST API |
+| **Prometheus** | `/prometheus` | Monitoring with node-exporter and cAdvisor |
+| **Nextcloud** | `/nextcloud` | Personal cloud storage (files, calendar, contacts) |
+| **Forgejo** | `/git` | Git server (Gitea fork) |
+| **Matrix Synapse** | `/_matrix` | Decentralized chat server |
+| **Jitsi Meet** | `/jitsi` | Video conferencing |
+
+### Service Access
+
+After deployment, access services at:
+- `http://YOUR_ONION.onion/graphql` - SelfPrivacy GraphQL API
+- `http://YOUR_ONION.onion/prometheus` - Prometheus metrics UI
+- `http://YOUR_ONION.onion/nextcloud` - Nextcloud (user: admin, pass: see `/var/lib/nextcloud/admin-pass`)
+- `http://YOUR_ONION.onion/git` - Forgejo Git server (self-registration enabled)
+- `http://YOUR_ONION.onion/_matrix` - Matrix Synapse API (registration enabled)
+- `http://YOUR_ONION.onion/jitsi` - Jitsi Meet video conferences
+
+### Note on Email
+
+Email server is **not** included for Tor operation because:
+1. .onion addresses cannot have MX DNS records
+2. Email federation requires clearnet DNS
+3. Most email providers block Tor exit nodes
+
+For private messaging over Tor, use Matrix instead.
 
 ## Prerequisites
 
@@ -178,3 +210,48 @@ From host (requires Tor SOCKS proxy on port 9050):
 ```bash
 curl --socks5-hostname 127.0.0.1:9050 http://YOUR_ONION_ADDRESS.onion/api/version
 ```
+
+## Adding More Services
+
+The current setup includes the core services listed above. Additional services from [selfprivacy-nixos-config](https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config) that can be added:
+
+| Service | Notes |
+|---------|-------|
+| **bitwarden** | Password manager (Vaultwarden) - requires SSO bypass |
+| **pleroma** | Fediverse social network - requires SSO bypass |
+| **mumble** | Voice chat server - simple to add |
+| **hedgedoc** | Collaborative markdown notes |
+| **vikunja** | Task/project management |
+| **writefreely** | Minimalist blog platform |
+| **roundcube** | Webmail client (needs mail server) |
+| **ocserv** | VPN server (OpenConnect) |
+| **actual** | Budgeting app |
+
+### How to Add Services
+
+1. Edit `flake.nix` in the `selfprivacyTorModule` section
+2. Add the service configuration (see existing services as examples)
+3. Add Nginx location for path-based routing
+4. Add service metadata in `/etc/sp-modules/{service-id}`
+5. Rebuild the VM:
+   ```bash
+   VBoxManage controlvm SelfPrivacy-Tor-Test poweroff
+   ./build-and-run.sh
+   ```
+
+### Service Configuration Notes
+
+**For Tor operation:**
+- All services use HTTP (Tor provides end-to-end encryption)
+- Path-based routing instead of subdomains (e.g., `/nextcloud` instead of `cloud.example.com`)
+- SSO/Kanidm is disabled - services use local authentication
+- Registration is enabled for testing purposes
+
+**Service metadata:**
+The SelfPrivacy API discovers services from `/etc/sp-modules/{service-id}`. Each file contains JSON with:
+- `meta.id`, `meta.name`, `meta.description`
+- `meta.svgIcon` - SVG icon for the UI
+- `meta.systemdServices` - systemd services to monitor
+- `meta.folders` - directories used by the service
+
+See the SelfPrivacy documentation: https://selfprivacy.org/docs/
