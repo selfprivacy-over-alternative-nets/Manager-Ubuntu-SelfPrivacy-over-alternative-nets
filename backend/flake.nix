@@ -685,7 +685,7 @@
             name = "Nextcloud";
             description = "Nextcloud is a personal cloud storage solution for files, calendar, and contacts. Access via /nextcloud/ path. Login: admin / see /var/lib/nextcloud/admin-pass";
             svgIcon = nextcloudIcon;
-            isMovable = true;
+            isMovable = false;
             isRequired = false;
             canBeBackedUp = true;
             backupDescription = "All your files, calendar entries, contacts, and database.";
@@ -706,7 +706,7 @@
             name = "Forgejo";
             description = "Forgejo is a self-hosted Git service (Gitea fork). Access via /git/ path on your .onion address.";
             svgIcon = giteaIcon;
-            isMovable = true;
+            isMovable = false;
             isRequired = false;
             canBeBackedUp = true;
             backupDescription = "All Git repositories, issues, pull requests, and user data.";
@@ -727,7 +727,7 @@
             name = "Matrix Synapse";
             description = "Matrix Synapse is a decentralized communication server. Access client APIs via /_matrix/ path.";
             svgIcon = matrixIcon;
-            isMovable = true;
+            isMovable = false;
             isRequired = false;
             canBeBackedUp = true;
             backupDescription = "All Matrix rooms, messages, and user data.";
