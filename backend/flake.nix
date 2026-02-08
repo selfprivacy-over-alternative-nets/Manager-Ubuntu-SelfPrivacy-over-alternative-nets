@@ -611,35 +611,62 @@
           mode = "0600";
         };
 
-        # The SelfPrivacy API's FlakeServiceManager expects this file
-        environment.etc."nixos/sp-modules/flake.nix" = {
-          text = ''
+        # Create writable sp-modules/flake.nix on first boot
+        # The SelfPrivacy API's FlakeServiceManager reads and writes this file
+        systemd.services.selfprivacy-init-sp-modules = {
+          description = "Initialize writable SelfPrivacy sp-modules";
+          wantedBy = [ "multi-user.target" ];
+          before = [ "selfprivacy-api.service" ];
+          serviceConfig.Type = "oneshot";
+          serviceConfig.RemainAfterExit = true;
+          script = ''
+            mkdir -p /etc/nixos/sp-modules
+            if [ ! -f /etc/nixos/sp-modules/flake.nix ]; then
+              cat > /etc/nixos/sp-modules/flake.nix << 'EOFLAKE'
             {
               description = "SelfPrivacy NixOS PoC modules/extensions/bundles/packages/etc";
               outputs = _: { };
             }
+            EOFLAKE
+              chmod 644 /etc/nixos/sp-modules/flake.nix
+            fi
           '';
-          mode = "0644";
         };
 
-        environment.etc."nixos/userdata.json" = {
-          text = builtins.toJSON {
-            username = "admin";
-            hashedPassword = "";
-            sshKeys = [];
-            dns = {
-              provider = "NONE";
-            };
-            server = {
-              provider = "NONE";
-            };
-            domain = "test.onion";
-            autoUpgrade = {
-              enable = false;
-            };
-            timezone = "UTC";
-          };
-          mode = "0644";
+        # Create a writable userdata.json on first boot
+        # NixOS etc files are read-only symlinks to the Nix store,
+        # but the SelfPrivacy API needs to write to this file
+        systemd.services.selfprivacy-init-userdata = {
+          description = "Initialize writable SelfPrivacy userdata";
+          wantedBy = [ "multi-user.target" ];
+          before = [ "selfprivacy-api.service" ];
+          serviceConfig.Type = "oneshot";
+          serviceConfig.RemainAfterExit = true;
+          script = ''
+            mkdir -p /etc/nixos
+            if [ ! -f /etc/nixos/userdata.json ]; then
+              cat > /etc/nixos/userdata.json << 'EOJSON'
+            ${builtins.toJSON {
+              username = "admin";
+              hashedPassword = "";
+              sshKeys = [];
+              dns = { provider = "NONE"; };
+              server = { provider = "NONE"; };
+              domain = "test.onion";
+              autoUpgrade = { enable = false; };
+              timezone = "UTC";
+              modules = {
+                nextcloud = { enable = true; };
+                gitea = { enable = true; };
+                jitsi-meet = { enable = true; };
+                monitoring = { enable = true; };
+                matrix = { enable = true; };
+              };
+            }}
+            EOJSON
+              chmod 600 /etc/nixos/userdata.json
+            fi
+          '';
         };
 
         # ============================================================
