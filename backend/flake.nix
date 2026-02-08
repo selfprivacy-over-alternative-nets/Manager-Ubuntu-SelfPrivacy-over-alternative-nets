@@ -611,7 +611,7 @@
           mode = "0600";
         };
 
-        environment.etc."selfprivacy/userdata.json" = {
+        environment.etc."nixos/userdata.json" = {
           text = builtins.toJSON {
             username = "admin";
             hashedPassword = "";
@@ -649,7 +649,7 @@
             backupDescription = "Backups are not available for Prometheus metrics data.";
             systemdServices = [ "prometheus.service" ];
             folders = [ "/var/lib/prometheus2" ];
-            license = [{ free = true; redistributable = true; fullName = "Apache License 2.0"; shortName = "Apache-2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0"; }];
+            license = [{ deprecated = false; free = true; redistributable = true; fullName = "Apache License 2.0"; shortName = "Apache-2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0"; }];
             homepage = "https://prometheus.io/";
             sourcePage = "https://github.com/prometheus/prometheus";
             supportLevel = "normal";
@@ -670,7 +670,7 @@
             backupDescription = "Secrets used to encrypt communication between Jitsi components.";
             systemdServices = [ "prosody.service" "jitsi-videobridge2.service" "jicofo.service" ];
             folders = [ "/var/lib/jitsi-meet" ];
-            license = [{ free = true; redistributable = true; fullName = "Apache License 2.0"; shortName = "Apache-2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0"; }];
+            license = [{ deprecated = false; free = true; redistributable = true; fullName = "Apache License 2.0"; shortName = "Apache-2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0"; }];
             homepage = "https://jitsi.org/meet";
             sourcePage = "https://github.com/jitsi/jitsi-meet";
             supportLevel = "normal";
@@ -691,7 +691,7 @@
             backupDescription = "All your files, calendar entries, contacts, and database.";
             systemdServices = [ "phpfpm-nextcloud.service" ];
             folders = [ "/var/lib/nextcloud" ];
-            license = [{ free = true; redistributable = true; fullName = "GNU Affero General Public License v3.0"; shortName = "AGPL-3.0"; url = "https://www.gnu.org/licenses/agpl-3.0.html"; }];
+            license = [{ deprecated = false; free = true; redistributable = true; fullName = "GNU Affero General Public License v3.0"; shortName = "AGPL-3.0"; url = "https://www.gnu.org/licenses/agpl-3.0.html"; }];
             homepage = "https://nextcloud.com/";
             sourcePage = "https://github.com/nextcloud/server";
             supportLevel = "normal";
@@ -712,7 +712,7 @@
             backupDescription = "All Git repositories, issues, pull requests, and user data.";
             systemdServices = [ "forgejo.service" ];
             folders = [ "/var/lib/forgejo" ];
-            license = [{ free = true; redistributable = true; fullName = "MIT License"; shortName = "MIT"; url = "https://opensource.org/licenses/MIT"; }];
+            license = [{ deprecated = false; free = true; redistributable = true; fullName = "MIT License"; shortName = "MIT"; url = "https://opensource.org/licenses/MIT"; }];
             homepage = "https://forgejo.org/";
             sourcePage = "https://codeberg.org/forgejo/forgejo";
             supportLevel = "normal";
@@ -733,7 +733,7 @@
             backupDescription = "All Matrix rooms, messages, and user data.";
             systemdServices = [ "matrix-synapse.service" ];
             folders = [ "/var/lib/matrix-synapse" ];
-            license = [{ free = true; redistributable = true; fullName = "Apache License 2.0"; shortName = "Apache-2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0"; }];
+            license = [{ deprecated = false; free = true; redistributable = true; fullName = "Apache License 2.0"; shortName = "Apache-2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0"; }];
             homepage = "https://matrix.org/";
             sourcePage = "https://github.com/element-hq/synapse";
             supportLevel = "normal";
