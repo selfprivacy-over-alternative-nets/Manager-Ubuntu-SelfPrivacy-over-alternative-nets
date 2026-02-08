@@ -258,14 +258,20 @@
             };
 
             # Forgejo/Gitea
-            locations."/git" = {
-              proxyPass = "http://127.0.0.1:3000";
+            # Use /git/ with trailing slash in location, and trailing slash in proxy_pass
+            # to properly strip the prefix when proxying
+            locations."/git/" = {
+              proxyPass = "http://127.0.0.1:3000/";
               extraConfig = ''
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                 proxy_set_header X-Forwarded-Proto http;
               '';
+            };
+            # Redirect /git to /git/
+            locations."= /git" = {
+              return = "301 /git/";
             };
 
             # Matrix Synapse
