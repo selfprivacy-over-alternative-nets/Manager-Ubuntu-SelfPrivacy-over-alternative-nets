@@ -77,9 +77,12 @@ cd "$SCRIPT_DIR/.."
 git add virtualbox-test 2>/dev/null || true
 cd "$SCRIPT_DIR"
 
-if [ ! -L result ]; then
-    nix build .#default
-fi
+# Remove old result to force rebuild with new services
+rm -f result
+
+echo -e "${CYAN}Building with verbose output (this may take a while)...${NC}"
+nix build .#default --print-build-logs --verbose 2>&1 | tee /tmp/nix-build.log
+
 ISO_PATH=$(readlink -f result/iso/*.iso)
 echo -e "${GREEN}ISO: $ISO_PATH${NC}"
 

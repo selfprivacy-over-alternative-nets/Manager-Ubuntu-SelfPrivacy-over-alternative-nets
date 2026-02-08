@@ -223,22 +223,25 @@
             locations."/jitsi" = {
               alias = "${pkgs.jitsi-meet}/";
               index = "index.html";
-              extraConfig = ''
-                # Handle BOSH for XMPP
-                location /http-bind {
-                  proxy_pass http://127.0.0.1:5280/http-bind;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header Host $host;
-                }
+            };
 
-                # Handle WebSocket for XMPP
-                location /xmpp-websocket {
-                  proxy_pass http://127.0.0.1:5280/xmpp-websocket;
-                  proxy_http_version 1.1;
-                  proxy_set_header Upgrade $http_upgrade;
-                  proxy_set_header Connection "upgrade";
-                  proxy_set_header Host $host;
-                }
+            # Jitsi BOSH for XMPP
+            locations."/http-bind" = {
+              proxyPass = "http://127.0.0.1:5280/http-bind";
+              extraConfig = ''
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header Host $host;
+              '';
+            };
+
+            # Jitsi WebSocket for XMPP
+            locations."/xmpp-websocket" = {
+              proxyPass = "http://127.0.0.1:5280/xmpp-websocket";
+              extraConfig = ''
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_set_header Host $host;
               '';
             };
 
