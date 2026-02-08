@@ -457,7 +457,7 @@
           ensureDatabases = [ "matrix-synapse" ];
           ensureUsers = [{
             name = "matrix-synapse";
-            ensureClauses.createdb = true;
+            ensureDBOwnership = true;
           }];
         };
 
