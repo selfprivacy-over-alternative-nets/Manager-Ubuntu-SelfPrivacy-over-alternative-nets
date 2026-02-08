@@ -70,6 +70,7 @@ tor -f /tmp/user-torrc &
 
 ```bash
 # From the root of this repo:
+rm -rf ~/.local/share/selfprivacy/*.hive ~/.local/share/selfprivacy/*.lock && echo "Cleared selfprivacy data - app will start fresh"
 cd flutter-app/selfprivacy.org.app
 flutter pub get
 flutter run -d linux --verbose 2>&1 | tee /tmp/app.log
