@@ -425,8 +425,10 @@
           settings = {
             DEFAULT.APP_NAME = "SelfPrivacy Git";
             server = {
-              DOMAIN = "git.test.onion";
-              ROOT_URL = "http://git.test.onion/";
+              # Domain is the .onion hostname (placeholder, actual value set dynamically)
+              DOMAIN = "localhost";
+              # ROOT_URL must match the nginx location path
+              ROOT_URL = "http://localhost/git/";
               HTTP_PORT = 3000;
               HTTP_ADDR = "127.0.0.1";
             };
@@ -467,6 +469,16 @@
             enable_registration = true;
             enable_registration_without_verification = true;
             allow_guest_access = false;
+            database = {
+              name = "psycopg2";
+              args = {
+                user = "matrix-synapse";
+                database = "matrix-synapse";
+                host = "/run/postgresql";
+              };
+              # Allow non-C locale for database (not recommended for production)
+              allow_unsafe_locale = true;
+            };
             listeners = [{
               port = 8008;
               bind_addresses = [ "127.0.0.1" ];
@@ -540,6 +552,8 @@
           enable = true;
           port = 9001;
           listenAddress = "127.0.0.1";
+          # External URL is required for proper path-based routing
+          webExternalUrl = "http://localhost/prometheus";
           exporters = {
             node = {
               enable = true;
