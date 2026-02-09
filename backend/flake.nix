@@ -118,6 +118,8 @@
             xz.bin
             gzip
             gitMinimal
+            iproute2
+            util-linux
           ];
           serviceConfig = {
             User = "root";
@@ -144,6 +146,8 @@
             xz.bin
             gzip
             gitMinimal
+            iproute2
+            util-linux
           ];
           serviceConfig = {
             User = "root";
