@@ -110,7 +110,6 @@
           environment = {
             HOME = "/root";
             PYTHONUNBUFFERED = "1";
-            TEST_MODE = "true";  # Enable test mode
           };
           path = with pkgs; [
             coreutils
@@ -138,7 +137,6 @@
           environment = {
             HOME = "/root";
             PYTHONUNBUFFERED = "1";
-            TEST_MODE = "true";
           };
           path = with pkgs; [
             coreutils
@@ -250,15 +248,24 @@
               '';
             };
 
-            # Nextcloud - proxy to PHP-FPM via fastcgi
-            locations."/nextcloud" = {
-              proxyPass = "http://127.0.0.1:80";  # Will be handled by nextcloud vhost
+            # Nextcloud - proxy to separate internal port (8081) with path stripping
+            # Trailing slashes on both location and proxy_pass strip the /nextcloud/ prefix
+            # Nextcloud's overwritewebroot="/nextcloud" handles URL generation in HTML
+            # proxy_redirect off since Nextcloud generates correct absolute URLs via overwrite settings
+            locations."/nextcloud/" = {
+              proxyPass = "http://127.0.0.1:8081/";
               extraConfig = ''
                 proxy_set_header Host nextcloud.test.onion;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                 proxy_set_header X-Forwarded-Proto http;
+                proxy_redirect off;
+                client_max_body_size 512M;
               '';
+            };
+            # Redirect /nextcloud to /nextcloud/
+            locations."= /nextcloud" = {
+              return = "301 /nextcloud/";
             };
 
             # Forgejo/Gitea
@@ -392,6 +399,8 @@
           configureRedis = true;
           settings = {
             overwriteprotocol = "http";  # For Tor operation
+            overwritewebroot = "/nextcloud";  # Served under /nextcloud/ sub-path
+            # overwritehost is set dynamically at boot from the .onion address
             loglevel = 0;
             updatechecker = false;
           };
@@ -400,6 +409,34 @@
             adminuser = "admin";
             adminpassFile = "/var/lib/nextcloud/admin-pass";
           };
+        };
+
+        # Make Nextcloud's nginx vhost listen on internal port 8081 instead of 80
+        # This avoids conflict with the main onion vhost and allows path-based proxy
+        services.nginx.virtualHosts."nextcloud.test.onion" = {
+          listen = lib.mkForce [{ addr = "127.0.0.1"; port = 8081; }];
+        };
+
+        # Set Nextcloud overwritehost to the .onion address after boot
+        systemd.services.nextcloud-set-onion-host = {
+          description = "Set Nextcloud overwritehost to .onion address";
+          after = [ "nextcloud-setup.service" "tor.service" ];
+          wants = [ "tor.service" ];
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig.Type = "oneshot";
+          serviceConfig.RemainAfterExit = true;
+          path = [ config.services.nextcloud.occ ];
+          script = ''
+            for i in $(seq 1 120); do
+              if [ -f /var/lib/tor/hidden_service/hostname ]; then
+                ONION=$(cat /var/lib/tor/hidden_service/hostname)
+                nextcloud-occ config:system:set overwritehost --value="$ONION"
+                echo "Set overwritehost to $ONION"
+                break
+              fi
+              sleep 1
+            done
+          '';
         };
 
         # Nextcloud systemd configuration
@@ -629,11 +666,21 @@
               cat > /etc/nixos/sp-modules/flake.nix << 'EOFLAKE'
             {
               description = "SelfPrivacy NixOS PoC modules/extensions/bundles/packages/etc";
+
+              inputs.nextcloud.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/nextcloud";
+              inputs.gitea.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/gitea";
+              inputs.jitsi-meet.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/jitsi-meet";
+              inputs.matrix.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/matrix";
+              inputs.monitoring.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/monitoring";
+
               outputs = _: { };
             }
             EOFLAKE
               chmod 644 /etc/nixos/sp-modules/flake.nix
             fi
+
+            # Create suggested modules file for the API's enable() method
+            echo '["nextcloud", "gitea", "jitsi-meet", "matrix", "monitoring", "simple-nixos-mailserver", "roundcube"]' > /etc/suggested-sp-modules
           '';
         };
 

@@ -70,6 +70,7 @@ tor -f /tmp/user-torrc &
 
 ```bash
 # From the root of this repo:
+cd selfprivacy/Manager-Ubuntu-SelfPrivacy-Over-Tor/flutter-app/selfprivacy.org.app
 rm -rf ~/.local/share/selfprivacy/*.hive ~/.local/share/selfprivacy/*.lock && echo "Cleared selfprivacy data - app will start fresh"
 cd flutter-app/selfprivacy.org.app
 flutter pub get
