@@ -19,12 +19,47 @@ new_collection/
 
 ## Quick Start
 
-### Prerequisites
+### Prerequisites (Ubuntu/Debian)
 
+```bash
+# Install build dependencies
+sudo apt install ninja-build clang cmake pkg-config git curl \
+  libgtk-3-dev libsecret-1-dev libjsoncpp-dev libblkid-dev \
+  liblzma-dev xdg-user-dirs gnome-keyring unzip xz-utils zip \
+  sshpass openjdk-21-jdk
+
+# Install Flutter to /opt (NOT snap - snap causes GLib version conflicts)
+curl -L https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.2-stable.tar.xz | sudo tar xJf - -C /opt
+echo 'export PATH="/opt/flutter/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+
+# Install Android SDK (for Android builds)
+# Option A: Install Android Studio from https://developer.android.com/studio
+# Option B: Command-line only:
+mkdir -p ~/Android/Sdk && cd ~/Android/Sdk
+curl -sL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o cmdline-tools.zip
+unzip cmdline-tools.zip && mkdir -p cmdline-tools && mv cmdline-tools cmdline-tools/latest
+export ANDROID_HOME=~/Android/Sdk
+yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;36.1.0" "platform-tools"
+flutter config --android-sdk ~/Android/Sdk
+
+# Install Tor daemon (for .onion connectivity)
+sudo apt install tor
+sudo systemctl enable --now tor
+
+# Verify Tor is running on port 9050
+ss -tlnp | grep 9050
+
+# For Android emulator: enable KVM
+sudo modprobe kvm && sudo modprobe kvm_intel && sudo chmod 666 /dev/kvm
+```
+
+**Requirements:**
 1. **Ubuntu/Linux host** with VirtualBox installed
 2. **Nix package manager** with flakes enabled
-3. **Flutter SDK** for building the app
-4. **Tor** for SOCKS5 proxy
+3. **Flutter SDK** (3.32.2+) for building the app
+4. **Android SDK** for Android APK builds
+5. **Tor** for SOCKS5 proxy
 
 ### Updating the Flutter App Submodule (ONCE at start of clone)
 
@@ -66,16 +101,56 @@ EOF
 tor -f /tmp/user-torrc &
 ```
 
-### Step 3: Run Flutter App
+### Step 3: Run Flutter App (Linux Desktop)
 
 ```bash
-# From the root of this repo:
-cd selfprivacy/Manager-Ubuntu-SelfPrivacy-Over-Tor/flutter-app/selfprivacy.org.app
-rm -rf ~/.local/share/selfprivacy/*.hive ~/.local/share/selfprivacy/*.lock && echo "Cleared selfprivacy data - app will start fresh"
 cd flutter-app/selfprivacy.org.app
+rm -rf ~/.local/share/selfprivacy/*.hive ~/.local/share/selfprivacy/*.lock
 flutter pub get
 flutter run -d linux --verbose 2>&1 | tee /tmp/app.log
 ```
+
+### Step 3 (Alternative): Build and Run Android APK
+
+```bash
+cd flutter-app/selfprivacy.org.app
+flutter pub get
+
+# Get .onion address from your VM
+ONION=$(sshpass -p '' ssh -p 2222 root@localhost cat /var/lib/tor/hidden_service/hostname)
+
+# Build debug APK with auto-setup (skips onboarding, connects to your .onion)
+flutter build apk --flavor production --debug \
+  --dart-define=ONION_DOMAIN=$ONION \
+  --dart-define=API_TOKEN=test-token-for-tor-development
+
+# APK is at: build/app/outputs/flutter-apk/app-production-debug.apk
+```
+
+**To install on Android emulator:**
+```bash
+# Enable KVM first (required for usable emulator speed)
+sudo modprobe kvm && sudo modprobe kvm_intel && sudo chmod 666 /dev/kvm
+
+# Start emulator (create one in Android Studio first, or use avdmanager)
+export ANDROID_HOME=~/Android/Sdk
+$ANDROID_HOME/emulator/emulator -avd Medium_Phone_API_36.1 -no-audio &
+
+# Wait for boot, then install
+$ANDROID_HOME/platform-tools/adb wait-for-device
+$ANDROID_HOME/platform-tools/adb install build/app/outputs/flutter-apk/app-production-debug.apk
+
+# View logs
+$ANDROID_HOME/platform-tools/adb logcat -s flutter,SelfPrivacy
+```
+
+**To install on physical Android device:**
+1. Install [Orbot](https://play.google.com/store/apps/details?id=org.torproject.android) (Tor proxy for Android)
+2. Enable "VPN mode" in Orbot to route all traffic through Tor
+3. Transfer the APK to the device and install it
+4. Open the app — it will auto-connect to your .onion backend
+
+**Note:** On Android, services opened via "Open in Browser" require a Tor-capable browser (e.g., Tor Browser for Android) or Orbot in VPN mode routing the default browser through Tor.
 
 ### Step 4: Connect
 

@@ -1,0 +1,62 @@
+name: Linux Desktop Build
+
+on:
+  push:
+    branches: [ main, feature/* ]
+    paths:
+      - 'flutter-app/**'
+      - '.github/workflows/linux-build.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'flutter-app/**'
+      - '.github/workflows/linux-build.yml'
+
+jobs:
+  build-linux:
+    name: Build Linux Desktop
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter-app/selfprivacy.org.app
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang cmake pkg-config \
+            libgtk-3-dev libsecret-1-dev libjsoncpp-dev libblkid-dev \
+            liblzma-dev xdg-user-dirs
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.2'
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Linux
+        run: flutter build linux --release
+
+      - name: Verify build output
+        run: |
+          BINARY="build/linux/x64/release/bundle/selfprivacy"
+          ls -lh "$BINARY"
+          file "$BINARY"
+          # Quick sanity check that it's an ELF executable
+          file "$BINARY" | grep -q "ELF" && echo "Binary: valid ELF" || { echo "Binary: NOT ELF"; exit 1; }
+
+      - name: Upload Linux bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: selfprivacy-linux-x64
+          path: flutter-app/selfprivacy.org.app/build/linux/x64/release/bundle/
+          retention-days: 30
