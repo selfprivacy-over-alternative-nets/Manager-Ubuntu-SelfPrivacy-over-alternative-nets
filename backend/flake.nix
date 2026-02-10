@@ -721,6 +721,61 @@
         };
 
         # ============================================================
+        # TOR RUNTIME PATCHES
+        # These services apply bind-mount patches at boot for Tor operation
+        # ============================================================
+
+        # Set userdata.json domain to actual .onion address at boot
+        systemd.services.selfprivacy-set-onion-domain = {
+          description = "Set SelfPrivacy domain to .onion address";
+          after = [ "tor.service" "selfprivacy-init-userdata.service" ];
+          wants = [ "tor.service" ];
+          before = [ "selfprivacy-api.service" ];
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig.Type = "oneshot";
+          serviceConfig.RemainAfterExit = true;
+          path = [ pkgs.python312 pkgs.coreutils ];
+          script = let
+            setDomainScript = pkgs.writeText "set-onion-domain.py" ''
+              import json, sys
+              onion = sys.argv[1]
+              with open("/etc/nixos/userdata.json", "r") as f:
+                  data = json.load(f)
+              data["domain"] = onion
+              with open("/etc/nixos/userdata.json", "w") as f:
+                  json.dump(data, f, indent=4)
+              print(f"Set domain to {onion}")
+            '';
+          in ''
+            for i in $(seq 1 120); do
+              if [ -f /var/lib/tor/hidden_service/hostname ]; then
+                ONION=$(cat /var/lib/tor/hidden_service/hostname)
+                python3 ${setDomainScript} "$ONION"
+                break
+              fi
+              sleep 1
+            done
+          '';
+        };
+
+        # Patch service URL generation and user provider for Tor operation
+        # Bind-mounts patched Python files over nix store originals
+        systemd.services.selfprivacy-patch-tor-urls = {
+          description = "Patch SelfPrivacy API service URLs for Tor";
+          before = [ "selfprivacy-api.service" "selfprivacy-api-worker.service" ];
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig.Type = "oneshot";
+          serviceConfig.RemainAfterExit = true;
+          path = [ pkgs.python312 pkgs.util-linux pkgs.coreutils ];
+          script = let
+            sitePkg = "${selfprivacy-graphql-api}/lib/python3.12/site-packages";
+            patchScript = pkgs.writeText "patch-tor-urls.py" (builtins.readFile ./patches/patch-tor-urls.py);
+          in ''
+            python3 ${patchScript} ${sitePkg}
+          '';
+        };
+
+        # ============================================================
         # SERVICE METADATA FOR SELFPRIVACY API DISCOVERY
         # Each file in /etc/sp-modules/{id} describes a service
         # ============================================================
