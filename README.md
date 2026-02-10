@@ -112,45 +112,7 @@ flutter run -d linux --verbose 2>&1 | tee /tmp/app.log
 
 ### Step 3 (Alternative): Build and Run Android APK
 
-```bash
-cd flutter-app/selfprivacy.org.app
-flutter pub get
-
-# Get .onion address from your VM
-ONION=$(sshpass -p '' ssh -p 2222 root@localhost cat /var/lib/tor/hidden_service/hostname)
-
-# Build debug APK with auto-setup (skips onboarding, connects to your .onion)
-flutter build apk --flavor production --debug \
-  --dart-define=ONION_DOMAIN=$ONION \
-  --dart-define=API_TOKEN=test-token-for-tor-development
-
-# APK is at: build/app/outputs/flutter-apk/app-production-debug.apk
-```
-
-**To install on Android emulator:**
-```bash
-# Enable KVM first (required for usable emulator speed)
-sudo modprobe kvm && sudo modprobe kvm_intel && sudo chmod 666 /dev/kvm
-
-# Start emulator (create one in Android Studio first, or use avdmanager)
-export ANDROID_HOME=~/Android/Sdk
-$ANDROID_HOME/emulator/emulator -avd Medium_Phone_API_36.1 -no-audio &
-
-# Wait for boot, then install
-$ANDROID_HOME/platform-tools/adb wait-for-device
-$ANDROID_HOME/platform-tools/adb install build/app/outputs/flutter-apk/app-production-debug.apk
-
-# View logs
-$ANDROID_HOME/platform-tools/adb logcat -s flutter,SelfPrivacy
-```
-
-**To install on physical Android device:**
-1. Install [Orbot](https://play.google.com/store/apps/details?id=org.torproject.android) (Tor proxy for Android)
-2. Enable "VPN mode" in Orbot to route all traffic through Tor
-3. Transfer the APK to the device and install it
-4. Open the app — it will auto-connect to your .onion backend
-
-**Note:** On Android, services opened via "Open in Browser" require a Tor-capable browser (e.g., Tor Browser for Android) or Orbot in VPN mode routing the default browser through Tor.
+See [flutter-app/README.md](flutter-app/README.md#e-building-and-running-android-apk) for full Android build, emulator, and device installation instructions.
 
 ### Step 4: Connect
 
