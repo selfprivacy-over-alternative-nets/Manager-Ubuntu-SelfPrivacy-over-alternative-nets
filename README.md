@@ -13,8 +13,7 @@ new_collection/
 │   ├── flake.lock           # Pinned dependencies
 │   └── build-and-run.sh     # Automatic deployment script
 └── flutter-app/             # Modified Flutter app
-    ├── README.md            # Detailed app instructions
-    └── selfprivacy.org.app/ # Full Flutter source code
+    └── selfprivacy.org.app/ # Full Flutter source code (with README)
 ```
 
 ## Quick Start
@@ -131,7 +130,6 @@ See [flutter-app/selfprivacy.org.app/README.md](flutter-app/selfprivacy.org.app/
 | C. Backend log inspection | [backend/README.md](backend/README.md#c-viewing-backend-logs) |
 | D. Linux desktop app with logs | [flutter-app/selfprivacy.org.app/README.md](flutter-app/selfprivacy.org.app/README.md#running-the-linux-desktop-app) |
 | E. Android APK build | [flutter-app/selfprivacy.org.app/README.md](flutter-app/selfprivacy.org.app/README.md#building-and-running-android-apk) |
-| Tor code modifications | [flutter-app/README.md](flutter-app/README.md#modifications-made-for-tor-support) |
 
 ---
 
