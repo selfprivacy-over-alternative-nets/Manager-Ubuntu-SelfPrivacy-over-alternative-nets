@@ -159,7 +159,11 @@ def patch_services_init(content):
 
 def patch_users_init(content):
     """Use JsonUserRepository instead of KanidmUserRepository."""
-    return content.replace("KanidmUserRepository", "JsonUserRepository")
+    return (
+        "from selfprivacy_api.repositories.users.json_user_repository import JsonUserRepository\n"
+        "\n"
+        "ACTIVE_USERS_PROVIDER = JsonUserRepository\n"
+    )
 
 
 # Apply all patches
