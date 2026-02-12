@@ -100,7 +100,58 @@ EOF
 tor -f /tmp/user-torrc &
 ```
 
-### Step 3: Run Flutter App (Linux Desktop)
+### Step 3: Trust the Self-Signed Certificate (Optional)
+
+The backend uses a self-signed TLS certificate for HTTPS. The SelfPrivacy Flutter
+app already accepts it, but other apps (Nextcloud, browsers, curl) will show
+security warnings unless you install the certificate as a trusted CA.
+
+**Ubuntu (system CA store):**
+```bash
+# Install (fetches cert from VM automatically)
+./scripts/trust-cert.sh
+
+# Or manually:
+sshpass -p '' scp -P 2222 root@localhost:/etc/ssl/selfprivacy/cert.pem /tmp/sp-cert.pem
+sudo cp /tmp/sp-cert.pem /usr/local/share/ca-certificates/selfprivacy-tor-ca.crt
+sudo update-ca-certificates
+
+# Verify (should work without -k):
+curl --socks5-hostname 127.0.0.1:9050 https://YOUR_ONION.onion/api/version
+
+# Remove:
+sudo rm /usr/local/share/ca-certificates/selfprivacy-tor-ca.crt
+sudo update-ca-certificates --fresh
+```
+
+**Android:**
+```bash
+# Push cert to device (fetches from VM automatically)
+./scripts/trust-cert-android.sh
+
+# Or manually:
+sshpass -p '' scp -P 2222 root@localhost:/etc/ssl/selfprivacy/cert.pem /tmp/sp-cert.pem
+openssl x509 -in /tmp/sp-cert.pem -outform DER -out /tmp/selfprivacy-tor-ca.crt
+adb push /tmp/selfprivacy-tor-ca.crt /sdcard/Download/
+
+# Then on the device:
+#   Settings > Security > Encryption & credentials
+#   > Install a certificate > CA certificate > Install anyway
+#   > Select selfprivacy-tor-ca.crt from Downloads
+#
+# To remove:
+#   Settings > Security > Encryption & credentials
+#   > Trusted credentials > User tab > selfprivacy-tor > Remove
+```
+
+**What trusts the cert after installation:**
+
+| Platform | Trusts system/user CA | Does NOT trust (use web instead) |
+|----------|----------------------|----------------------------------|
+| Ubuntu | curl, wget, Python, Dart/Flutter, Java | Chrome, Brave, Firefox (own cert stores) |
+| Android | Nextcloud, Chrome | Jitsi Meet, Element |
+
+### Step 4: Run Flutter App (Linux Desktop)
 
 ```bash
 cd flutter-app/selfprivacy.org.app
@@ -109,11 +160,11 @@ flutter pub get
 flutter run -d linux --verbose 2>&1 | tee /tmp/app.log
 ```
 
-### Step 3 (Alternative): Build and Run Android APK
+### Step 4 (Alternative): Build and Run Android APK
 
 See [flutter-app/selfprivacy.org.app/README.md](flutter-app/selfprivacy.org.app/README.md#building-and-running-android-apk) for full Android build, emulator, and device installation instructions.
 
-### Step 4: Connect
+### Step 5: Connect
 
 1. In the app, choose "I already have a server"
 2. Enter your .onion address (from Step 1)

@@ -208,7 +208,7 @@ sshpass -p '' ssh -p 2222 root@localhost curl http://127.0.0.1:5050/api/version
 ### Check .onion is accessible
 From host (requires Tor SOCKS proxy on port 9050):
 ```bash
-curl --socks5-hostname 127.0.0.1:9050 http://YOUR_ONION_ADDRESS.onion/api/version
+curl --socks5-hostname 127.0.0.1:9050 -k https://YOUR_ONION_ADDRESS.onion/api/version
 ```
 
 ## Adding More Services
@@ -242,7 +242,7 @@ The current setup includes the core services listed above. Additional services f
 ### Service Configuration Notes
 
 **For Tor operation:**
-- All services use HTTP (Tor provides end-to-end encryption)
+- All services use HTTPS with a self-signed certificate (install the CA cert to avoid warnings — see main README)
 - Path-based routing instead of subdomains (e.g., `/nextcloud` instead of `cloud.example.com`)
 - SSO/Kanidm is disabled - services use local authentication
 - Registration is enabled for testing purposes
