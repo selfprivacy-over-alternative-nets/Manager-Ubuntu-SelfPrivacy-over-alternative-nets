@@ -155,29 +155,64 @@
         };
 
         # Generate self-signed TLS certificate for .onion HTTPS
+        # Waits for Tor to generate the .onion hostname, then creates a cert
+        # with the actual hostname as SAN so clients can verify it.
         systemd.services.selfprivacy-generate-ssl-cert = {
           description = "Generate self-signed TLS certificate for .onion HTTPS";
           wantedBy = [ "multi-user.target" ];
+          after = [ "tor.service" ];
           before = [ "nginx.service" ];
           serviceConfig.Type = "oneshot";
           serviceConfig.RemainAfterExit = true;
           path = [ pkgs.openssl pkgs.coreutils ];
           script = ''
             CERT_DIR="/etc/ssl/selfprivacy"
+            HOSTNAME_FILE="/var/lib/tor/hidden_service/hostname"
             mkdir -p "$CERT_DIR"
+
+            # Wait for Tor to generate the .onion hostname (up to 60s)
+            for i in $(seq 1 60); do
+              [ -f "$HOSTNAME_FILE" ] && break
+              sleep 1
+            done
+
+            ONION_HOST=""
+            if [ -f "$HOSTNAME_FILE" ]; then
+              ONION_HOST=$(cat "$HOSTNAME_FILE" | tr -d '[:space:]')
+              echo "Onion hostname: $ONION_HOST"
+            else
+              echo "WARNING: Tor hostname not found, using wildcard SAN"
+            fi
+
+            # Regenerate if cert doesn't exist or if the onion hostname changed
+            NEED_REGEN=false
             if [ ! -f "$CERT_DIR/cert.pem" ] || [ ! -f "$CERT_DIR/key.pem" ]; then
+              NEED_REGEN=true
+            elif [ -n "$ONION_HOST" ]; then
+              # Check if current cert already has the correct SAN
+              if ! openssl x509 -in "$CERT_DIR/cert.pem" -noout -text 2>/dev/null | grep -q "$ONION_HOST"; then
+                echo "Cert SAN does not match current onion hostname, regenerating"
+                NEED_REGEN=true
+              fi
+            fi
+
+            if [ "$NEED_REGEN" = true ]; then
+              SAN="DNS:*.onion"
+              [ -n "$ONION_HOST" ] && SAN="DNS:$ONION_HOST,DNS:*.onion"
+
               openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
                 -days 3650 -nodes \
                 -keyout "$CERT_DIR/key.pem" \
                 -out "$CERT_DIR/cert.pem" \
                 -subj "/CN=selfprivacy-tor" \
-                -addext "subjectAltName=DNS:*.onion"
+                -addext "subjectAltName=$SAN" \
+                -addext "basicConstraints=critical,CA:TRUE"
               chown root:nginx "$CERT_DIR/key.pem"
               chmod 640 "$CERT_DIR/key.pem"
               chmod 644 "$CERT_DIR/cert.pem"
-              echo "Generated self-signed TLS certificate"
+              echo "Generated self-signed TLS certificate with SAN=$SAN"
             else
-              echo "TLS certificate already exists"
+              echo "TLS certificate already exists with correct SAN"
             fi
           '';
         };
