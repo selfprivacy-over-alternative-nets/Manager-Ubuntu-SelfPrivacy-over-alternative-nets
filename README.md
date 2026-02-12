@@ -188,12 +188,12 @@ adb logcat | grep -i selfprivacy
 │                                          ▼                   │
 │  ┌──────────────────┐     ┌─────────────────────────────┐   │
 │  │  SelfPrivacy API │◀────│     Tor Hidden Service      │   │
-│  │   (port 5050)    │     │   (xxx.onion:80 → :5050)    │   │
+│  │   (port 5050)    │     │  (xxx.onion:443 → :443/TLS) │   │
 │  └────────┬─────────┘     └─────────────────────────────┘   │
 │           │                                                  │
 │  ┌────────▼─────────┐     ┌─────────────────────────────┐   │
 │  │      Redis       │     │         Nginx               │   │
-│  │  (token storage) │     │    (reverse proxy)          │   │
+│  │  (token storage) │     │  (reverse proxy + TLS)      │   │
 │  └──────────────────┘     └─────────────────────────────┘   │
 │                                                              │
 │                      NixOS System                            │
@@ -255,7 +255,7 @@ sshpass -p '' ssh -p 2222 root@localhost curl http://127.0.0.1:5050/api/version
 curl --socks5-hostname 127.0.0.1:9050 https://check.torproject.org/api/ip
 
 # Test .onion from host
-curl --socks5-hostname 127.0.0.1:9050 http://YOUR_ONION.onion/api/version
+curl --socks5-hostname 127.0.0.1:9050 -k https://YOUR_ONION.onion/api/version
 ```
 
 ### Recovery key rejected

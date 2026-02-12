@@ -73,7 +73,6 @@
           settings = {
             HiddenServiceDir = "/var/lib/tor/hidden_service";
             HiddenServicePort = [
-              "80 127.0.0.1:80"
               "443 127.0.0.1:443"
             ];
           };
@@ -155,13 +154,44 @@
           };
         };
 
-        # Nginx reverse proxy - HTTP for Tor (no TLS needed for .onion)
+        # Generate self-signed TLS certificate for .onion HTTPS
+        systemd.services.selfprivacy-generate-ssl-cert = {
+          description = "Generate self-signed TLS certificate for .onion HTTPS";
+          wantedBy = [ "multi-user.target" ];
+          before = [ "nginx.service" ];
+          serviceConfig.Type = "oneshot";
+          serviceConfig.RemainAfterExit = true;
+          path = [ pkgs.openssl pkgs.coreutils ];
+          script = ''
+            CERT_DIR="/etc/ssl/selfprivacy"
+            mkdir -p "$CERT_DIR"
+            if [ ! -f "$CERT_DIR/cert.pem" ] || [ ! -f "$CERT_DIR/key.pem" ]; then
+              openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+                -days 3650 -nodes \
+                -keyout "$CERT_DIR/key.pem" \
+                -out "$CERT_DIR/cert.pem" \
+                -subj "/CN=selfprivacy-tor" \
+                -addext "subjectAltName=DNS:*.onion"
+              chown root:nginx "$CERT_DIR/key.pem"
+              chmod 640 "$CERT_DIR/key.pem"
+              chmod 644 "$CERT_DIR/cert.pem"
+              echo "Generated self-signed TLS certificate"
+            else
+              echo "TLS certificate already exists"
+            fi
+          '';
+        };
+
+        # Nginx reverse proxy - HTTPS with self-signed cert for .onion
         services.nginx = {
           enable = true;
 
           virtualHosts."onion" = {
-            listen = [{ addr = "0.0.0.0"; port = 80; }];
+            listen = [{ addr = "0.0.0.0"; port = 443; ssl = true; }];
             default = true;
+            onlySSL = true;
+            sslCertificate = "/etc/ssl/selfprivacy/cert.pem";
+            sslCertificateKey = "/etc/ssl/selfprivacy/key.pem";
 
             locations."/" = {
               root = pkgs.writeTextDir "index.html" ''
@@ -258,7 +288,7 @@
                 proxy_set_header Host nextcloud.test.onion;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto http;
+                proxy_set_header X-Forwarded-Proto https;
                 proxy_redirect off;
                 client_max_body_size 512M;
               '';
@@ -277,7 +307,7 @@
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto http;
+                proxy_set_header X-Forwarded-Proto https;
               '';
             };
             # Redirect /git to /git/
@@ -292,7 +322,7 @@
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto http;
+                proxy_set_header X-Forwarded-Proto https;
                 client_max_body_size 50M;
               '';
             };
@@ -302,7 +332,7 @@
               extraConfig = ''
                 default_type application/json;
                 add_header Access-Control-Allow-Origin *;
-                return 200 '{"m.homeserver": {"base_url": "http://synapse.test.onion"}, "m.server": "synapse.test.onion:80"}';
+                return 200 '{"m.homeserver": {"base_url": "https://synapse.test.onion"}, "m.server": "synapse.test.onion:443"}';
               '';
             };
           };
@@ -337,6 +367,10 @@
           };
         };
         security.pam.services.sshd.allowNullPassword = true;
+
+        # Ensure nginx starts after TLS cert is generated
+        systemd.services.nginx.after = [ "selfprivacy-generate-ssl-cert.service" ];
+        systemd.services.nginx.wants = [ "selfprivacy-generate-ssl-cert.service" ];
 
         # Firewall - only allow local connections (Tor handles external)
         networking.firewall = {
@@ -393,12 +427,12 @@
           enable = true;
           package = pkgs.nextcloud32;
           hostName = "nextcloud.test.onion";
-          https = false;  # HTTP for Tor (Tor provides end-to-end encryption)
+          https = true;  # HTTPS with self-signed cert for .onion
           autoUpdateApps.enable = true;
           autoUpdateApps.startAt = "05:00:00";
           configureRedis = true;
           settings = {
-            overwriteprotocol = "http";  # For Tor operation
+            overwriteprotocol = "https";  # HTTPS for Tor with self-signed cert
             overwritewebroot = "/nextcloud";  # Served under /nextcloud/ sub-path
             # overwritehost is set dynamically at boot from the .onion address
             loglevel = 0;
@@ -475,7 +509,7 @@
               # Domain is the .onion hostname (placeholder, actual value set dynamically)
               DOMAIN = "localhost";
               # ROOT_URL must match the nginx location path
-              ROOT_URL = "http://localhost/git/";
+              ROOT_URL = "https://localhost/git/";
               HTTP_PORT = 3000;
               HTTP_ADDR = "127.0.0.1";
             };
@@ -483,7 +517,7 @@
               DISABLE_REGISTRATION = false;  # Allow registration for testing
             };
             session = {
-              COOKIE_SECURE = false;  # HTTP for Tor
+              COOKIE_SECURE = true;  # HTTPS for Tor with self-signed cert
             };
           };
         };
@@ -512,7 +546,7 @@
           enable = true;
           settings = {
             server_name = "test.onion";
-            public_baseurl = "http://synapse.test.onion";
+            public_baseurl = "https://synapse.test.onion";
             enable_registration = true;
             enable_registration_without_verification = true;
             allow_guest_access = false;
@@ -600,7 +634,7 @@
           port = 9001;
           listenAddress = "127.0.0.1";
           # External URL is required for proper path-based routing
-          webExternalUrl = "http://localhost/prometheus";
+          webExternalUrl = "https://localhost/prometheus";
           exporters = {
             node = {
               enable = true;

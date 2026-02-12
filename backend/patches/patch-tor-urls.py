@@ -69,7 +69,7 @@ def patch_service_py(content):
         '        if domain and domain.endswith(".onion"):\n'
         '            path = _TOR_SERVICE_PATHS.get(cls.get_id())\n'
         '            if path:\n'
-        '                return f"http://{domain}{path}"\n'
+        '                return f"https://{domain}{path}"\n'
         '        subdomain = cls.get_subdomain()\n'
         '        return f"https://{subdomain}.{domain}"'
     )
@@ -99,7 +99,7 @@ def patch_templated_service_py(content):
         '        if domain and domain.endswith(".onion"):\n'
         '            path = _TOR_SERVICE_PATHS.get(self.get_id())\n'
         '            if path:\n'
-        '                return f"http://{domain}{path}"\n'
+        '                return f"https://{domain}{path}"\n'
         '        subdomain = self.get_subdomain()\n'
         '        if not subdomain:\n'
         '            return None\n'
@@ -128,7 +128,7 @@ def patch_prometheus_init(content):
         '        """Return service url."""\n'
         '        domain = get_domain()\n'
         '        if domain and domain.endswith(".onion"):\n'
-        '            return f"http://{domain}/prometheus/"\n'
+        '            return f"https://{domain}/prometheus/"\n'
         '        return None'
     )
     content = content.replace(old, new)
@@ -150,7 +150,7 @@ def patch_services_init(content):
         '        """Return service url."""\n'
         '        domain = get_domain()\n'
         '        if domain and domain.endswith(".onion"):\n'
-        '            return f"http://{domain}/api/"\n'
+        '            return f"https://{domain}/api/"\n'
         '        return f"https://api.{domain}"'
     )
     content = content.replace(old, new)

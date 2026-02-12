@@ -25,12 +25,12 @@ The following services are pre-configured and accessible via path-based routing 
 ### Service Access
 
 After deployment, access services at:
-- `http://YOUR_ONION.onion/graphql` - SelfPrivacy GraphQL API
-- `http://YOUR_ONION.onion/prometheus` - Prometheus metrics UI
-- `http://YOUR_ONION.onion/nextcloud` - Nextcloud (user: admin, pass: see `/var/lib/nextcloud/admin-pass`)
-- `http://YOUR_ONION.onion/git` - Forgejo Git server (self-registration enabled)
-- `http://YOUR_ONION.onion/_matrix` - Matrix Synapse API (registration enabled)
-- `http://YOUR_ONION.onion/jitsi` - Jitsi Meet video conferences
+- `https://YOUR_ONION.onion/graphql` - SelfPrivacy GraphQL API
+- `https://YOUR_ONION.onion/prometheus` - Prometheus metrics UI
+- `https://YOUR_ONION.onion/nextcloud` - Nextcloud (user: admin, pass: see `/var/lib/nextcloud/admin-pass`)
+- `https://YOUR_ONION.onion/git` - Forgejo Git server (self-registration enabled)
+- `https://YOUR_ONION.onion/_matrix` - Matrix Synapse API (registration enabled)
+- `https://YOUR_ONION.onion/jitsi` - Jitsi Meet video conferences
 
 ### Note on Email
 
