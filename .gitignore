@@ -23,7 +23,8 @@ build/
 *.swo
 
 # Demo screenshots (contain live .onion addresses)
-demo/
+demo/*
+!demo/*.gif
 
 # OS
 .DS_Store

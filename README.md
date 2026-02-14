@@ -16,6 +16,20 @@ new_collection/
     └── selfprivacy.org.app/ # Full Flutter source code (with README)
 ```
 
+## Demos
+
+### SelfPrivacy App (Android) over Tor
+
+The SelfPrivacy Flutter app connects to the backend over Tor, showing the dashboard, services (Forgejo, Jitsi, Matrix, Nextcloud), and user management:
+
+![SelfPrivacy App Tor Demo](demo/selfprivacy-app-tor-demo.gif)
+
+### Nextcloud App (Android) over Tor HTTPS
+
+The Nextcloud Android app connecting to a .onion HTTPS backend, trusting the self-signed certificate, and successfully logging in:
+
+![Nextcloud App Tor Demo](demo/nextcloud-app-tor-demo.gif)
+
 ## Quick Start
 
 ### Prerequisites (Ubuntu/Debian)
