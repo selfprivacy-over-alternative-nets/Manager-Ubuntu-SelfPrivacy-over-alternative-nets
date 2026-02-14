@@ -22,6 +22,9 @@ build/
 *.swp
 *.swo
 
+# Demo screenshots (contain live .onion addresses)
+demo/
+
 # OS
 .DS_Store
 Thumbs.db

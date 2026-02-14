@@ -201,7 +201,7 @@
               [ -n "$ONION_HOST" ] && SAN="DNS:$ONION_HOST,DNS:*.onion"
 
               openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
-                -days 3650 -nodes \
+                -days 397 -nodes \
                 -keyout "$CERT_DIR/key.pem" \
                 -out "$CERT_DIR/cert.pem" \
                 -subj "/CN=selfprivacy-tor" \
