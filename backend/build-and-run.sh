@@ -114,6 +114,7 @@ echo -e "${GREEN}VM created${NC}"
 
 # Start VM
 echo -e "${YELLOW}Step 3/7: Booting from ISO...${NC}"
+ssh-keygen -R '[localhost]:2222' 2>/dev/null || true
 VBoxManage startvm "$VM_NAME" --type headless
 
 # Wait for SSH

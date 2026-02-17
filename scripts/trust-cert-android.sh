@@ -6,6 +6,7 @@
 #   ./trust-cert-android.sh                   # Fetch from VM and push
 #   ./trust-cert-android.sh /path/to/cert.pem # Push a specific cert
 #   ./trust-cert-android.sh --remove          # Remove cert file from device
+#   ./trust-cert-android.sh --verify          # Check if CA cert is installed
 
 set -euo pipefail
 
@@ -86,6 +87,58 @@ remove_cert() {
 main() {
     if [ "${1:-}" = "--remove" ]; then
         remove_cert
+        exit 0
+    fi
+
+    check_device
+
+    local cert_file=""
+    local tmp_cert=""
+
+    if [ -n "${1:-}" ] && [ -f "${1:-}" ]; then
+        cert_file="$1"
+        echo "Using provided certificate: ${cert_file}"
+    else
+        tmp_cert="$(mktemp /tmp/selfprivacy-cert-XXXXXX.pem)"
+        fetch_cert "${tmp_cert}"
+        cert_file="${tmp_cert}"
+    fi
+
+    push_cert "${cert_file}"
+
+    if [ -n "${tmp_cert}" ]; then
+        rm -f "${tmp_cert}"
+    fi
+}
+
+verify_cert() {
+    check_device
+    echo "Checking for user-installed CA certificates..."
+    local certs_dir="/data/misc/user/0/cacerts-added"
+    local files
+    files=$(adb shell "ls ${certs_dir} 2>/dev/null" | tr -d '\r')
+
+    if [ -z "$files" ]; then
+        echo "No user CA certificates installed on device."
+        exit 1
+    fi
+
+    echo "Installed user CA certs:"
+    for f in $files; do
+        local subject
+        subject=$(adb shell "cat ${certs_dir}/${f}" | openssl x509 -noout -subject 2>/dev/null || echo "(could not parse)")
+        echo "  ${f}: ${subject}"
+    done
+}
+
+main() {
+    if [ "${1:-}" = "--remove" ]; then
+        remove_cert
+        exit 0
+    fi
+
+    if [ "${1:-}" = "--verify" ]; then
+        verify_cert
         exit 0
     fi
 
