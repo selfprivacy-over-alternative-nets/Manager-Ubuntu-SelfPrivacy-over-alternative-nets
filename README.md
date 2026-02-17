@@ -81,12 +81,12 @@ To ensure the Flutter app refers to the latest commit of the main branch:
 ```bash
 git submodule update --init --recursive --remote
 ```
-This fetches the latest changes from the `main` branch of the [SelfPrivacy-Flutter-Ubuntu-and-Android-App-Over-Tor](https://github.com/selfprivacy-over-tor/SelfPrivacy-Flutter-Ubuntu-and-Android-App-Over-Tor) repository.
+This fetches the latest changes from the `main` branch of the [SelfPrivacy-Flutter-Ubuntu-and-Android-App-Over-Alternative-Nets](https://github.com/selfprivacy-over-alternative-nets/SelfPrivacy-Flutter-Ubuntu-and-Android-App-Over-Alternative-Nets) repository.
 
 ### Updating Flutter App submodule after commit
-Each time you push commits to the SelfPrivacy-Flutter-Ubuntu-and-Android-App-Over-Tor repo, in this Manager-Ubuntu-SelfPrivacy-Over-Tor repo get that latest commit with:
+Each time you push commits to the SelfPrivacy-Flutter-Ubuntu-and-Android-App-Over-Alternative-Nets repo, in this Manager-Ubuntu-SelfPrivacy-Over-Alternative-Nets repo get that latest commit with:
 ```sh
-cd /home/a/git/git/selfprivacy/Manager-Ubuntu-SelfPrivacy-Over-Tor
+cd /home/a/git/git/selfprivacy/Manager-Ubuntu-SelfPrivacy-Over-Alternative-Nets
 git add flutter-app/selfprivacy.org.app
 git commit -m "Update flutter-app submodule to latest"
 git push
@@ -304,22 +304,22 @@ The upstream SelfPrivacy API works as-is. Tor handles all network routing extern
 
 ### Backend not accessible
 ```bash
-# Check VM is running
+# Check VM is running — good: shows "SelfPrivacy-Tor-Test", bad: empty output
 VBoxManage list runningvms
 
-# Check Tor service
+# Check Tor service — good: "Active: active (running)", bad: "inactive" or "failed"
 sshpass -p '' ssh -p 2222 root@localhost systemctl status tor
 
-# Test API locally in VM
+# Test API locally in VM — good: {"version":"3.x.x"}, bad: "Connection refused"
 sshpass -p '' ssh -p 2222 root@localhost curl http://127.0.0.1:5050/api/version
 ```
 
 ### App can't connect
 ```bash
-# Verify host Tor proxy
+# Verify host Tor proxy — good: {"IsTor":true,...}, bad: "Connection refused" (Tor not running on host)
 curl --socks5-hostname 127.0.0.1:9050 https://check.torproject.org/api/ip
 
-# Test .onion from host
+# Test .onion from host — good: {"version":"3.x.x"}, bad: "Connection refused" or timeout (hidden service not published yet, wait a few minutes)
 curl --socks5-hostname 127.0.0.1:9050 -k https://YOUR_ONION.onion/api/version
 ```
 
@@ -347,4 +347,9 @@ sshpass -p '' ssh -p 2222 root@localhost cat /var/lib/tor/hidden_service/hostnam
 
 # Delete VM
 VBoxManage unregistervm "SelfPrivacy-Tor-Test" --delete
+
+# Nextcloud
+username=`admin`
+
+sshpass -p '' ssh -p 2222 -o StrictHostKeyChecking=no root@localhost 'cat /var/lib/nextcloud/admin-pass'
 ```
