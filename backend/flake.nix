@@ -5,9 +5,9 @@
     # Use the same nixpkgs as selfprivacy-api to avoid package incompatibilities
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
 
-    # SelfPrivacy REST API
+    # SelfPrivacy REST API (forked with Tor subpath URL support)
     selfprivacy-api = {
-      url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-rest-api.git";
+      url = "git+https://github.com/selfprivacy-over-alternative-nets/selfprivacy-api.git?ref=tor-support";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -790,8 +790,10 @@
         };
 
         # ============================================================
-        # TOR RUNTIME PATCHES
-        # These services apply bind-mount patches at boot for Tor operation
+        # TOR BOOT-TIME CONFIGURATION
+        # The API fork (tor-support branch) handles .onion URL routing
+        # natively — no runtime patching needed. Only domain injection
+        # into userdata.json is still required at boot.
         # ============================================================
 
         # Set userdata.json domain to actual .onion address at boot
@@ -824,23 +826,6 @@
               fi
               sleep 1
             done
-          '';
-        };
-
-        # Patch service URL generation and user provider for Tor operation
-        # Bind-mounts patched Python files over nix store originals
-        systemd.services.selfprivacy-patch-tor-urls = {
-          description = "Patch SelfPrivacy API service URLs for Tor";
-          before = [ "selfprivacy-api.service" "selfprivacy-api-worker.service" ];
-          wantedBy = [ "multi-user.target" ];
-          serviceConfig.Type = "oneshot";
-          serviceConfig.RemainAfterExit = true;
-          path = [ pkgs.python312 pkgs.util-linux pkgs.coreutils ];
-          script = let
-            sitePkg = "${selfprivacy-graphql-api}/lib/python3.12/site-packages";
-            patchScript = pkgs.writeText "patch-tor-urls.py" (builtins.readFile ./patches/patch-tor-urls.py);
-          in ''
-            python3 ${patchScript} ${sitePkg}
           '';
         };
 
