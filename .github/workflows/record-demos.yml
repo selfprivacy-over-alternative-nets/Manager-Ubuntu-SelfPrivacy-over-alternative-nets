@@ -1,0 +1,102 @@
+name: Record Demo GIFs
+
+# This workflow requires a self-hosted runner with:
+#   - VirtualBox installed
+#   - Nix with flakes enabled
+#   - Flutter SDK (3.32.2+)
+#   - Tor daemon
+#   - Xvfb, ffmpeg, gifsicle, asciinema, agg, xdotool
+#   - Android x86 VM (for GIF 3)
+#
+# It builds the backend, boots the VM, records all 3 demo GIFs,
+# destroys the Tor keys, and uploads the GIFs as artifacts.
+# On tag pushes, it also attaches GIFs to the GitHub Release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      record_gif1:
+        description: 'Record GIF 1 (Backend setup)'
+        type: boolean
+        default: true
+      record_gif2:
+        description: 'Record GIF 2 (Linux desktop app)'
+        type: boolean
+        default: true
+      record_gif3:
+        description: 'Record GIF 3 (Android VM app)'
+        type: boolean
+        default: true
+  push:
+    tags: ['v*']
+
+jobs:
+  record-gifs:
+    name: Record Demo GIFs
+    runs-on: self-hosted
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify self-hosted runner tools
+        run: |
+          echo "=== Checking required tools ==="
+          for tool in VBoxManage nix flutter sshpass asciinema ffmpeg gifsicle xdotool Xvfb; do
+            if command -v "$tool" &>/dev/null; then
+              echo "  ✓ $tool: $(command -v $tool)"
+            else
+              echo "  ✗ $tool: MISSING"
+              MISSING=1
+            fi
+          done
+          # agg may be in cargo bin
+          if command -v agg &>/dev/null; then
+            echo "  ✓ agg: $(command -v agg)"
+          else
+            echo "  ⚠ agg: not found (will be auto-installed by record-gif1.sh)"
+          fi
+          if [ "${MISSING:-}" = "1" ]; then
+            echo ""
+            echo "ERROR: Missing required tools. Install them on the self-hosted runner."
+            exit 1
+          fi
+
+      - name: Start Tor daemon
+        run: |
+          if ! ss -tlnp 2>/dev/null | grep -q ':9050 '; then
+            sudo systemctl start tor || tor -f <(echo "SocksPort 9050") &
+            sleep 5
+          fi
+          echo "Tor SOCKS proxy on port 9050: OK"
+
+      - name: Record GIF 1 — Backend Setup
+        if: github.event_name == 'push' || github.event.inputs.record_gif1 == 'true'
+        run: bash scripts/record-gif1.sh
+
+      - name: Record GIF 2 — Linux Desktop App
+        if: github.event_name == 'push' || github.event.inputs.record_gif2 == 'true'
+        run: bash scripts/record-gif2.sh
+
+      - name: Record GIF 3 — Android VM App
+        if: github.event_name == 'push' || github.event.inputs.record_gif3 == 'true'
+        run: bash scripts/record-gif3.sh
+
+      - name: Scrub Tor keys
+        run: bash scripts/scrub-and-push.sh
+
+      - name: Upload demo GIFs as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-gifs
+          path: demo/*.gif
+          retention-days: 90
+
+      - name: Attach GIFs to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: demo/*.gif

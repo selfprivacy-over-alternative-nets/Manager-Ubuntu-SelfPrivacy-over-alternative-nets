@@ -2,12 +2,13 @@ name: Android APK Build
 
 on:
   push:
-    branches: [ main, feature/* ]
+    tags: ['v*']
+    branches: [main, feature/*, improvements-*]
     paths:
       - 'flutter-app/**'
       - '.github/workflows/android-build.yml'
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'flutter-app/**'
       - '.github/workflows/android-build.yml'
@@ -42,28 +43,60 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build production debug APK
+      - name: Build debug APK (branch push)
+        if: "!startsWith(github.ref, 'refs/tags/')"
         run: |
           flutter build apk --flavor production --debug \
             --dart-define=ONION_DOMAIN=placeholder.onion \
             --dart-define=API_TOKEN=ci-build-token
 
+      - name: Build release APK (tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: flutter build apk --flavor production --release
+
       - name: Verify APK is valid
         run: |
-          APK="build/app/outputs/flutter-apk/app-production-debug.apk"
+          if [ -f "build/app/outputs/flutter-apk/app-production-release.apk" ]; then
+            APK="build/app/outputs/flutter-apk/app-production-release.apk"
+          else
+            APK="build/app/outputs/flutter-apk/app-production-debug.apk"
+          fi
           echo "=== APK Info ==="
           ls -lh "$APK"
           file "$APK"
-          # APK is a zip archive — verify integrity
           unzip -t "$APK" > /dev/null 2>&1 && echo "APK integrity: OK" || { echo "APK integrity: FAILED"; exit 1; }
-          # Verify it contains the expected Android manifest
           unzip -l "$APK" | grep -q "AndroidManifest.xml" && echo "AndroidManifest.xml: present" || { echo "AndroidManifest.xml: MISSING"; exit 1; }
-          # Verify it contains Dart code
           unzip -l "$APK" | grep -q "libflutter.so" && echo "libflutter.so: present" || { echo "libflutter.so: MISSING"; exit 1; }
 
-      - name: Upload debug APK
+      - name: Upload debug APK (artifact)
+        if: "!startsWith(github.ref, 'refs/tags/')"
         uses: actions/upload-artifact@v4
         with:
           name: selfprivacy-android-debug
           path: flutter-app/selfprivacy.org.app/build/app/outputs/flutter-apk/app-production-debug.apk
           retention-days: 30
+
+      - name: Rename release APK
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cp build/app/outputs/flutter-apk/app-production-release.apk \
+             "selfprivacy-android-${VERSION}.apk"
+          echo "APK_FILE=selfprivacy-android-${VERSION}.apk" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: flutter-app/selfprivacy.org.app/${{ env.APK_FILE }}
+          generate_release_notes: true
+          body: |
+            ## SelfPrivacy over Tor — Android App
+
+            Flutter app for Android with Tor SOCKS5 proxy support.
+
+            **Install:**
+            1. Transfer APK to your Android device
+            2. Install Orbot (Tor proxy) from F-Droid or Play Store
+            3. Enable Orbot, then open the SelfPrivacy app
+            4. Enter your .onion address and recovery key
