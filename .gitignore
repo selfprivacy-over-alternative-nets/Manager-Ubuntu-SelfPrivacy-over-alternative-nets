@@ -2,6 +2,7 @@
 result
 result-*
 *.iso
+.cache/
 
 # Logs
 *.log
@@ -21,6 +22,15 @@ build/
 .vscode/
 *.swp
 *.swo
+
+# Demo screenshots (contain live .onion addresses)
+demo/*
+!demo/*.gif
+
+# Tor hidden service keys (NEVER commit these)
+**/hs_ed25519_secret_key
+**/hs_ed25519_public_key
+**/hidden_service/hostname
 
 # OS
 .DS_Store

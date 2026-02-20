@@ -1,0 +1,68 @@
+name: Backend NixOS ISO Build
+
+on:
+  push:
+    tags: ['v*']
+    branches: [main, feature/*, improvements-*]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-build.yml'
+
+jobs:
+  build-iso:
+    name: Build NixOS ISO
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-25.11
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build ISO
+        working-directory: backend
+        run: nix build .#default --print-build-logs
+
+      - name: Get ISO path and size
+        id: iso
+        working-directory: backend
+        run: |
+          ISO=$(ls result/iso/*.iso)
+          echo "path=$ISO" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename $ISO)" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h $ISO | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: selfprivacy-tor-nixos-iso
+          path: backend/result/iso/*.iso
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: backend/result/iso/*.iso
+          generate_release_notes: true
+          body: |
+            ## SelfPrivacy over Tor — Backend ISO
+
+            NixOS installer ISO for VirtualBox. Use with `backend/build-and-run.sh`:
+
+            ```bash
+            cd backend && ./build-and-run.sh
+            ```
+
+            Choose option **1** (Download prebuilt image) when prompted.
+
+            **ISO size:** ${{ steps.iso.outputs.size }}
