@@ -5,6 +5,12 @@
 #   demo/setup-tor-demo.gif       — Using prebuilt ISO download
 #   demo/setup-tor-demo-build.gif — Building from source
 #
+# The raw asciinema recording is post-processed by compress-cast.py which
+# detects step markers ("Step N/7:") from the output and:
+#   - Fast-forwards long waits (nix build, VM boot) to a few seconds
+#   - Keeps the interesting transitions at readable speed
+#   - Holds the final credential banner so viewers can read it
+#
 # Prerequisites: VirtualBox, sshpass, asciinema, agg (auto-installed if missing)
 set -euo pipefail
 
@@ -66,27 +72,35 @@ record_session() {
     local script_file="$2"
 
     # asciinema requires a PTY — use `script` to provide one
+    # Use 40 rows so the final credential banner fits on screen
     script -q -c "asciinema rec \
         --cols 100 \
-        --rows 30 \
+        --rows 40 \
         --idle-time-limit 3 \
         --command 'bash $script_file' \
         --overwrite \
         '$cast_file'" /dev/null
 }
 
-# ── Convert .cast to .gif ───────────────────────────────────────────────────
+# ── Compress and convert .cast to .gif ────────────────────────────────────
 cast_to_gif() {
     local cast_file="$1"
     local gif_file="$2"
 
+    # Post-process: compress long waits, hold final output
+    local compressed="${cast_file%.cast}-compressed.cast"
+    echo -e "${YELLOW}Compressing recording...${NC}"
+    python3 "$SCRIPT_DIR/compress-cast.py" "$cast_file" "$compressed" --hold-end 8
+
     echo -e "${YELLOW}Converting to GIF: ${gif_file}${NC}"
     agg \
         --font-size 14 \
-        --speed 2 \
+        --speed 1 \
         --theme monokai \
-        "$cast_file" \
+        "$compressed" \
         "$gif_file"
+
+    rm -f "$compressed"
     echo -e "${GREEN}  Created: ${gif_file} ($(du -h "$gif_file" | cut -f1))${NC}"
 }
 

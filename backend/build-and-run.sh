@@ -1,8 +1,13 @@
 #!/bin/bash
-# build-and-run.sh — One-command SelfPrivacy Tor backend setup
+# build-and-run.sh — Single entry point for SelfPrivacy over Tor
 #
-# Guides you through setting up a NixOS VirtualBox VM with SelfPrivacy
-# running as a Tor hidden service. Designed to be run by anyone.
+# Usage:
+#   ./build-and-run.sh                  # Setup backend VM (interactive)
+#   ./build-and-run.sh --info           # Print credentials for running VM
+#   ./build-and-run.sh --app-linux      # Build & run SelfPrivacy app on Linux
+#   ./build-and-run.sh --app-android    # Build & deploy app to Android device
+#   ./build-and-run.sh --trust-cert     # Trust VM cert on Ubuntu
+#   ./build-and-run.sh --trust-cert-android  # Push VM cert to Android device
 #
 # Non-interactive mode (for CI/recording scripts):
 #   SP_BUILD_MODE=download|build  — skip ISO source prompt
@@ -123,11 +128,65 @@ print_success() {
     echo -e "    ${CYAN}sshpass -p '' ssh -p $SSH_PORT root@localhost journalctl -u nginx -u selfprivacy-api -f${NC}"
     echo ""
     echo -e "  ${BOLD}Record demo GIFs:${NC}"
-    echo -e "    ${CYAN}./scripts/record-gif1.sh${NC}  (backend setup)"
-    echo -e "    ${CYAN}./scripts/record-gif2.sh${NC}  (Linux desktop app)"
-    echo -e "    ${CYAN}./scripts/record-gif3.sh${NC}  (Android VM app)"
+    echo -e "    ${CYAN}./scripts/record-all-gifs.sh${NC}  (all GIFs, same .onion)"
     echo ""
 }
+
+# ── Subcommands ───────────────────────────────────────────────────────────
+require_vm() {
+    ONION=$(do_ssh_cmd cat /var/lib/tor/hidden_service/hostname 2>/dev/null || true)
+    if [ -z "$ONION" ]; then
+        echo -e "${RED}Error: VM is not running or .onion address not available.${NC}" >&2
+        echo -e "  Run ${CYAN}./build-and-run.sh${NC} first to set up the backend." >&2
+        exit 1
+    fi
+}
+
+case "${1:-}" in
+    --info)
+        require_vm
+        print_success
+        exit 0
+        ;;
+    --app-linux)
+        require_vm
+        shift
+        exec bash "$SCRIPT_DIR/../scripts/record-gif2.sh" "$@"
+        ;;
+    --app-android)
+        require_vm
+        shift
+        exec bash "$SCRIPT_DIR/../scripts/deploy-to-phone.sh" "$@"
+        ;;
+    --trust-cert)
+        require_vm
+        shift
+        exec bash "$SCRIPT_DIR/../scripts/trust-cert.sh" "$@"
+        ;;
+    --trust-cert-android)
+        require_vm
+        shift
+        exec bash "$SCRIPT_DIR/../scripts/trust-cert-android.sh" "$@"
+        ;;
+    --help|-h)
+        echo "Usage: ./build-and-run.sh [COMMAND]"
+        echo ""
+        echo "Commands:"
+        echo "  (none)               Setup backend VM (interactive)"
+        echo "  --info               Print credentials for running VM"
+        echo "  --app-linux          Build & run SelfPrivacy app on Linux desktop"
+        echo "  --app-android        Build & deploy SelfPrivacy app to Android device"
+        echo "  --trust-cert         Trust the VM's self-signed cert on Ubuntu"
+        echo "  --trust-cert-android Push the VM's cert to Android device"
+        echo "  --help               Show this help"
+        echo ""
+        echo "Environment variables (non-interactive backend setup):"
+        echo "  SP_BUILD_MODE=download|build"
+        echo "  SP_VM_ACTION=start|reinstall"
+        echo "  SP_TOR_KEY=/path/to/hs_ed25519_secret_key"
+        exit 0
+        ;;
+esac
 
 # ── Banner ──────────────────────────────────────────────────────────────────
 echo ""
