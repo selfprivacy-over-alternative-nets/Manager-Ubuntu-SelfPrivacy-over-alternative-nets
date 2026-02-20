@@ -127,32 +127,9 @@ cast_to_gif() {
     echo -e "${GREEN}  Created: ${gif_file} ($(du -h "$gif_file" | cut -f1))${NC}"
 }
 
-# ── Install recording dependencies ──────────────────────────────────────────
+# ── Check recording dependencies ────────────────────────────────────────────
 install_deps() {
-    local missing=""
-    command -v asciinema &>/dev/null || missing="$missing asciinema"
-    command -v sshpass &>/dev/null || missing="$missing sshpass"
-    command -v Xvfb &>/dev/null || missing="$missing xvfb"
-    command -v ffmpeg &>/dev/null || missing="$missing ffmpeg"
-    command -v gifsicle &>/dev/null || missing="$missing gifsicle"
-    command -v xdotool &>/dev/null || missing="$missing xdotool"
-    command -v VBoxManage &>/dev/null || { echo -e "${RED}VirtualBox required.${NC}"; exit 1; }
-
-    if [ -n "$missing" ]; then
-        echo -e "${YELLOW}Installing:${missing}${NC}"
-        sudo apt-get update -qq && sudo apt-get install -y -qq $missing
-    fi
-
-    # agg
-    if ! command -v agg &>/dev/null; then
-        echo -e "${YELLOW}Installing agg...${NC}"
-        local agg_url="https://github.com/asciinema/agg/releases/latest/download/agg-x86_64-unknown-linux-gnu"
-        local agg_dest="${HOME}/.local/bin/agg"
-        mkdir -p "$(dirname "$agg_dest")"
-        curl -sL -o "$agg_dest" "$agg_url"
-        chmod +x "$agg_dest"
-        export PATH="${HOME}/.local/bin:$PATH"
-    fi
+    bash "$SCRIPT_DIR/requirements.sh" --gifs
 }
 
 # ══════════════════════════════════════════════════════════════════════════════

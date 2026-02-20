@@ -29,19 +29,9 @@ SCREEN_W=1280
 SCREEN_H=720
 RECORD_SECONDS=45
 
-# ── Install dependencies ────────────────────────────────────────────────────
+# ── Check dependencies ─────────────────────────────────────────────────────
 install_deps() {
-    local missing=""
-    command -v Xvfb &>/dev/null || missing="$missing xvfb"
-    command -v ffmpeg &>/dev/null || missing="$missing ffmpeg"
-    command -v gifsicle &>/dev/null || missing="$missing gifsicle"
-    command -v xdotool &>/dev/null || missing="$missing xdotool"
-    command -v sshpass &>/dev/null || missing="$missing sshpass"
-
-    if [ -n "$missing" ]; then
-        echo -e "${YELLOW}Installing:${missing}${NC}"
-        sudo apt-get update -qq && sudo apt-get install -y -qq $missing
-    fi
+    bash "$SCRIPT_DIR/requirements.sh" --gifs
 }
 
 # ── Check prerequisites ────────────────────────────────────────────────────

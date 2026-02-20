@@ -5,10 +5,10 @@ Run SelfPrivacy services (Nextcloud, Gitea, Jitsi, Prometheus) as Tor hidden ser
 ## A. Setup Backend
 
 ```bash
-sudo apt install virtualbox sshpass tor
 git clone --recursive https://github.com/selfprivacy-over-tor/Manager-Ubuntu-SelfPrivacy-Over-Tor.git
-cd Manager-Ubuntu-SelfPrivacy-Over-Tor/backend
-./build-and-run.sh
+cd Manager-Ubuntu-SelfPrivacy-Over-Tor
+./scripts/requirements.sh            # install VirtualBox, sshpass, tor
+cd backend && ./build-and-run.sh
 ```
 
 Downloads (or builds) the NixOS image, creates a VM, starts Tor, prints all credentials. Re-running on an existing VM gives options to restart, regenerate `.onion`, or reinstall.
@@ -30,6 +30,7 @@ Build from source (~30 min):
 ### B.0 SelfPrivacy App (Linux Desktop)
 
 ```bash
+./scripts/requirements.sh --app-linux   # Flutter SDK + Linux build deps (first time only)
 ./build-and-run.sh --app-linux
 ```
 
@@ -50,6 +51,7 @@ Installs the VM's self-signed CA cert into the Ubuntu trust store. After that, o
 ### C.0 SelfPrivacy App
 
 ```bash
+./scripts/requirements.sh --app-android  # Flutter SDK + Android SDK (first time only)
 ./build-and-run.sh --app-android
 ```
 
@@ -102,6 +104,15 @@ Pushes the VM's CA cert to the Android device. Install it via Settings > Securit
 ## All Commands
 
 ```
+# Requirements (run once)
+./scripts/requirements.sh              # Backend deps (VirtualBox, sshpass, tor)
+./scripts/requirements.sh --app-linux  # + Flutter SDK + Linux build deps
+./scripts/requirements.sh --app-android # + Flutter SDK + Android SDK
+./scripts/requirements.sh --gifs       # + GIF recording tools
+./scripts/requirements.sh --all        # Everything
+./scripts/requirements.sh --check      # Dry-run: show what's missing
+
+# Usage
 ./build-and-run.sh                  # Setup backend VM (interactive)
 ./build-and-run.sh --info           # Print credentials
 ./build-and-run.sh --app-linux      # Build & run app on Linux
@@ -135,6 +146,7 @@ sshpass -p '' ssh -p 2222 root@localhost journalctl -u nginx -f                 
 All GIFs are recorded in a single session so they share the same `.onion` domain:
 
 ```bash
+./scripts/requirements.sh --gifs        # asciinema, agg, Xvfb, ffmpeg, etc. (first time only)
 bash scripts/record-all-gifs.sh
 ```
 

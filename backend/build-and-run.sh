@@ -197,6 +197,7 @@ echo ""
 
 # ── Check dependencies ──────────────────────────────────────────────────────
 echo -e "${BOLD}Checking dependencies...${NC}"
+bash "$SCRIPT_DIR/../scripts/requirements.sh" --check 2>/dev/null
 MISSING=""
 if ! command -v VBoxManage &>/dev/null; then MISSING="$MISSING virtualbox"; fi
 if ! command -v sshpass &>/dev/null; then MISSING="$MISSING sshpass"; fi
@@ -204,7 +205,7 @@ if ! command -v sshpass &>/dev/null; then MISSING="$MISSING sshpass"; fi
 if [ -n "$MISSING" ]; then
     echo -e "${RED}Missing:${MISSING}${NC}"
     echo ""
-    echo -e "  Install them with: ${CYAN}sudo apt install${MISSING}${NC}"
+    echo -e "  Run: ${CYAN}./scripts/requirements.sh${NC}"
     exit 1
 fi
 echo -e "  ${GREEN}All dependencies found.${NC}"
