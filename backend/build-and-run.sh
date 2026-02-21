@@ -4,7 +4,8 @@
 # Usage:
 #   ./build-and-run.sh                  # Setup backend VM (interactive)
 #   ./build-and-run.sh --info           # Print credentials for running VM
-#   ./build-and-run.sh --app-linux      # Build & run SelfPrivacy app on Linux
+#   ./build-and-run.sh --app-linux      # Build & launch SelfPrivacy app on Linux
+#   ./build-and-run.sh --record-gif-app-linux  # Record demo GIF of Linux app
 #   ./build-and-run.sh --app-android    # Build & deploy app to Android device
 #   ./build-and-run.sh --trust-cert     # Trust VM cert on Ubuntu
 #   ./build-and-run.sh --trust-cert-android  # Push VM cert to Android device
@@ -152,6 +153,30 @@ case "${1:-}" in
         ;;
     --app-linux)
         require_vm
+        FLUTTER_DIR="$SCRIPT_DIR/../flutter-app/selfprivacy.org.app"
+        if ! command -v flutter &>/dev/null; then
+            echo -e "${RED}Flutter SDK not found. Run: ${CYAN}./scripts/requirements.sh --app-linux${NC}" >&2
+            exit 1
+        fi
+        echo -e "${YELLOW}Building Flutter Linux app...${NC}"
+        echo -e "  .onion: ${CYAN}$ONION${NC}"
+        cd "$FLUTTER_DIR"
+        flutter pub get --no-example 2>/dev/null
+        flutter build linux --debug \
+            --dart-define=ONION_DOMAIN="$ONION" \
+            --dart-define=API_TOKEN=test-token-for-tor-development \
+            2>&1 | tail -5
+        BINARY="build/linux/x64/debug/bundle/selfprivacy"
+        if [ ! -f "$BINARY" ]; then
+            echo -e "${RED}Build failed — binary not found.${NC}" >&2
+            exit 1
+        fi
+        echo -e "${GREEN}Build complete. Launching...${NC}"
+        rm -rf ~/.local/share/selfprivacy/*.hive ~/.local/share/selfprivacy/*.lock 2>/dev/null || true
+        exec "$BINARY"
+        ;;
+    --record-gif-app-linux)
+        require_vm
         shift
         exec bash "$SCRIPT_DIR/../scripts/record-gif2.sh" "$@"
         ;;
@@ -251,12 +276,13 @@ case "${1:-}" in
         echo "Commands:"
         echo "  (none)               Setup backend VM (interactive)"
         echo "  --info               Print credentials for running VM"
-        echo "  --app-linux          Build & run SelfPrivacy app on Linux desktop"
+        echo "  --app-linux          Build & launch SelfPrivacy app on Linux desktop"
         echo "  --app-android        Build & deploy SelfPrivacy app to Android device"
         echo "  --trust-cert         Trust the VM's self-signed cert on Ubuntu"
         echo "  --trust-cert-android Push the VM's cert to Android device"
         echo "  --status             Check VM, Tor, and all services"
         echo "  --get-onion-private-key  Export Tor private key (base64, for KeePass)"
+        echo "  --record-gif-app-linux   Record demo GIF of Linux app setup"
         echo "  --help               Show this help"
         echo ""
         echo "Environment variables (non-interactive backend setup):"

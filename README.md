@@ -26,6 +26,12 @@ Build from source (~30 min):
 ![Setup Tor Demo Build](demo/setup-tor-demo-build.gif)
 
 ## B. Ubuntu Host
+```bash
+./build-and-run.sh --trust-cert
+```
+
+Installs the VM's self-signed CA cert into the Ubuntu trust store. After that, open services in a Tor-enabled browser (e.g. `https://YOUR_ONION.onion/nextcloud/`).
+
 
 ### B.0 SelfPrivacy App (Linux Desktop)
 
@@ -34,17 +40,17 @@ Build from source (~30 min):
 ./build-and-run.sh --app-linux
 ```
 
-Builds the Flutter app and launches it on the Linux desktop, auto-connecting to the backend over Tor.
+Builds the Flutter app and launches it on the Linux desktop, auto-connecting to the backend over Tor. After connecting it and logging into tor, you can even access Nextcloud via localhost at:
+http://localhost/
 
 ![Linux App Tor Demo](demo/linux-app-tor-demo.gif)
 
 ### B.1 Services (Nextcloud, Gitea, etc.)
-
-```bash
-./build-and-run.sh --trust-cert
+Ensure the trust ca certificate is installed on the Ubuntu host, then run:
+```sh
+torify nextcloud
 ```
-
-Installs the VM's self-signed CA cert into the Ubuntu trust store. After that, open services in a Tor-enabled browser (e.g. `https://YOUR_ONION.onion/nextcloud/`).
+and login and grant access.
 
 ## C. Android
 
@@ -129,7 +135,9 @@ Connect your phone through usb (adb) and allow usb-data connection with Ubuntu h
 ./build-and-run.sh --app-android    # Build & deploy app to Android
 ./build-and-run.sh --trust-cert     # Trust VM cert on Ubuntu
 ./build-and-run.sh --trust-cert-android  # Push VM cert to Android
+./build-and-run.sh --status             # Check VM, Tor, and all services
 ./build-and-run.sh --get-onion-private-key  # Export Tor key (base64, for KeePass)
+./build-and-run.sh --record-gif-app-linux   # Record demo GIF of Linux app
 ./build-and-run.sh --help           # Show help
 ```
 
