@@ -500,7 +500,9 @@
               if [ -f /var/lib/tor/hidden_service/hostname ]; then
                 ONION=$(cat /var/lib/tor/hidden_service/hostname)
                 nextcloud-occ config:system:set overwritehost --value="$ONION"
-                echo "Set overwritehost to $ONION"
+                nextcloud-occ config:system:set trusted_domains 0 --value="$ONION"
+                nextcloud-occ config:system:set overwrite.cli.url --value="https://$ONION/nextcloud"
+                echo "Set Nextcloud domain to $ONION"
                 break
               fi
               sleep 1

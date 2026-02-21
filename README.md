@@ -60,12 +60,22 @@ Builds the APK and deploys it to a connected Android device via ADB. Requires [O
 ![SelfPrivacy App Tor Demo](demo/selfprivacy-app-tor-demo.gif)
 
 ### C.1 Services (Nextcloud, etc.)
-
+Connect your phone through usb (adb) and allow usb-data connection with Ubuntu host. On Ubuntu host run:
 ```bash
 ./build-and-run.sh --trust-cert-android
 ```
-
-Pushes the VM's CA cert to the Android device. Install it via Settings > Security > Install a certificate, then connect the Nextcloud app to `https://YOUR_ONION.onion/nextcloud/`.
+1. Push the VM's CA cert to the Android device ***and install it via Settings > Security > Install a certificate***
+2. Install [Orbot](https://guardianproject.info/apps/org.torproject.android/) — (full-device VPN mode is not required).
+3. Install the standard Nextcloud APK from F-Droid
+4. Add the Nextcloud app to Orbot's app list, and connect orbot (and hence those apps) over tor.
+5. Clear the Nextcloud app's data and cache before each new login — otherwise the cached login flow redirects to the previous `.onion` domain
+6. Enter the server URL in this format:
+   ```
+   someonion.onion/nextcloud        (correct)
+   someonion.onion/nextcloud/       (wrong — trailing slash)
+   https://someonion.onion/nextcloud (wrong — no scheme prefix)
+   ```
+7. Optionally sync DAVx5 via Nextcloud>settings> add Calendar sync — it must also be routed through Orbot
 
 ![Nextcloud App Tor Demo](demo/nextcloud-app-tor-demo.gif)
 
@@ -119,6 +129,7 @@ Pushes the VM's CA cert to the Android device. Install it via Settings > Securit
 ./build-and-run.sh --app-android    # Build & deploy app to Android
 ./build-and-run.sh --trust-cert     # Trust VM cert on Ubuntu
 ./build-and-run.sh --trust-cert-android  # Push VM cert to Android
+./build-and-run.sh --get-onion-private-key  # Export Tor key (base64, for KeePass)
 ./build-and-run.sh --help           # Show help
 ```
 

@@ -8,6 +8,8 @@
 #   ./build-and-run.sh --app-android    # Build & deploy app to Android device
 #   ./build-and-run.sh --trust-cert     # Trust VM cert on Ubuntu
 #   ./build-and-run.sh --trust-cert-android  # Push VM cert to Android device
+#   ./build-and-run.sh --status             # Check VM, Tor, and all services
+#   ./build-and-run.sh --get-onion-private-key  # Export Tor key (base64)
 #
 # Non-interactive mode (for CI/recording scripts):
 #   SP_BUILD_MODE=download|build  — skip ISO source prompt
@@ -168,6 +170,81 @@ case "${1:-}" in
         shift
         exec bash "$SCRIPT_DIR/../scripts/trust-cert-android.sh" "$@"
         ;;
+    --status)
+        echo ""
+        echo -e "${BOLD}SelfPrivacy Tor VM — Status Check${NC}"
+        echo ""
+
+        # 1. VM running?
+        if sshpass -p '' ssh -n $SSH_OPTS -o ConnectTimeout=3 -p $SSH_PORT root@localhost true 2>/dev/null; then
+            echo -e "  ${GREEN}[ok]${NC} VM reachable via SSH (port $SSH_PORT)"
+        else
+            echo -e "  ${RED}[fail]${NC} VM not reachable via SSH (port $SSH_PORT)"
+            echo ""
+            echo -e "  Run ${CYAN}./build-and-run.sh${NC} to start it."
+            exit 1
+        fi
+
+        # 2. Tor running on VM?
+        ONION=$(do_ssh_cmd cat /var/lib/tor/hidden_service/hostname 2>/dev/null || true)
+        if [ -n "$ONION" ]; then
+            echo -e "  ${GREEN}[ok]${NC} Tor hidden service configured (${CYAN}$ONION${NC})"
+        else
+            echo -e "  ${RED}[fail]${NC} Tor hidden service not configured on VM"
+            exit 1
+        fi
+
+        # 3. Tor SOCKS proxy on host?
+        if ss -tlnp 2>/dev/null | grep -q ':9050 '; then
+            echo -e "  ${GREEN}[ok]${NC} Tor SOCKS proxy running on host (port 9050)"
+        else
+            echo -e "  ${RED}[fail]${NC} Tor SOCKS proxy not running on host (port 9050)"
+            echo -e "       Run: ${CYAN}sudo systemctl start tor${NC}"
+            exit 1
+        fi
+
+        # 4. Test services over Tor
+        echo ""
+        echo -e "  ${BOLD}Services over Tor:${NC}"
+
+        check_tor_url() {
+            local name="$1" path="$2"
+            local code
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+                --socks5-hostname 127.0.0.1:9050 \
+                -k "https://$ONION$path" 2>/dev/null) || true
+            code="${code:-000}"
+            if [ "$code" -ge 200 ] 2>/dev/null && [ "$code" -lt 400 ] 2>/dev/null; then
+                echo -e "  ${GREEN}[ok]${NC} $name (HTTP $code)"
+            elif [ "$code" = "000" ]; then
+                echo -e "  ${RED}[fail]${NC} $name (timeout/unreachable)"
+            else
+                echo -e "  ${YELLOW}[${code}]${NC} $name"
+            fi
+        }
+
+        check_tor_url "SelfPrivacy API" "/api/version"
+        check_tor_url "Nextcloud"       "/nextcloud/"
+        check_tor_url "Gitea"           "/git/"
+        check_tor_url "Jitsi Meet"      "/jitsi/"
+        check_tor_url "Prometheus"      "/prometheus/"
+
+        echo ""
+        exit 0
+        ;;
+    --get-onion-private-key)
+        require_vm
+        echo -e "${BOLD}.onion address:${NC} ${CYAN}$ONION${NC}"
+        echo ""
+        echo -e "${BOLD}Base64-encoded private key (for KeePass):${NC}"
+        do_ssh_cmd base64 -w0 /var/lib/tor/hidden_service/hs_ed25519_secret_key 2>/dev/null
+        echo ""
+        echo ""
+        echo -e "${BOLD}To restore later:${NC}"
+        echo -e "  ${CYAN}echo 'BASE64_STRING' | base64 -d > /tmp/hs_ed25519_secret_key${NC}"
+        echo -e "  ${CYAN}SP_TOR_KEY=/tmp/hs_ed25519_secret_key ./build-and-run.sh${NC}"
+        exit 0
+        ;;
     --help|-h)
         echo "Usage: ./build-and-run.sh [COMMAND]"
         echo ""
@@ -178,6 +255,8 @@ case "${1:-}" in
         echo "  --app-android        Build & deploy SelfPrivacy app to Android device"
         echo "  --trust-cert         Trust the VM's self-signed cert on Ubuntu"
         echo "  --trust-cert-android Push the VM's cert to Android device"
+        echo "  --status             Check VM, Tor, and all services"
+        echo "  --get-onion-private-key  Export Tor private key (base64, for KeePass)"
         echo "  --help               Show this help"
         echo ""
         echo "Environment variables (non-interactive backend setup):"
@@ -519,5 +598,11 @@ if [ -z "$ONION" ]; then
     echo -e "  Try: ${CYAN}sshpass -p '' ssh -p $SSH_PORT root@localhost cat /var/lib/tor/hidden_service/hostname${NC}"
     exit 1
 fi
+
+# Re-run domain services so all configs (userdata.json, Nextcloud) use the correct .onion
+echo -e "${YELLOW}  Updating service configs with .onion address...${NC}"
+do_ssh_cmd 'systemctl restart selfprivacy-set-onion-domain.service' 2>/dev/null || true
+do_ssh_cmd 'systemctl restart nextcloud-set-onion-host.service' 2>/dev/null || true
+echo -e "  ${GREEN}Done.${NC}"
 
 print_success
