@@ -46,7 +46,19 @@ http://localhost/
 ![Linux App Tor Demo](demo/linux-app-tor-demo.gif)
 
 ### B.1 Services (Nextcloud, Gitea, etc.)
-Ensure the trust ca certificate is installed on the Ubuntu host, then run:
+
+1. Start the local reverse proxy (kills any old proxy, fetches fresh certs, verifies Tor connectivity):
+   ```bash
+   ./build-and-run.sh --proxy
+   ```
+2. Open in Firefox: `https://localhost:8443/nextcloud/` (or `/git/`, `/jitsi/`, `/prometheus/`)
+3. Firefox will show a certificate warning — click **Advanced > Accept the Risk and Continue**
+4. Log in to Nextcloud (user: `admin`, password from `./build-and-run.sh --info`)
+5. Press Ctrl+C in the terminal to stop the proxy
+
+Re-run `--proxy` at any time — it automatically kills the old proxy, re-reads the current `.onion` and cert from the VM, and starts fresh.
+
+To sync with the Nextcloud desktop client:
 ```sh
 torify nextcloud
 ```
@@ -135,6 +147,7 @@ Connect your phone through usb (adb) and allow usb-data connection with Ubuntu h
 ./build-and-run.sh --app-android    # Build & deploy app to Android
 ./build-and-run.sh --trust-cert     # Trust VM cert on Ubuntu
 ./build-and-run.sh --trust-cert-android  # Push VM cert to Android
+./build-and-run.sh --proxy              # Browse .onion services at localhost:8443
 ./build-and-run.sh --status             # Check VM, Tor, and all services
 ./build-and-run.sh --get-onion-private-key  # Export Tor key (base64, for KeePass)
 ./build-and-run.sh --record-gif-app-linux   # Record demo GIF of Linux app

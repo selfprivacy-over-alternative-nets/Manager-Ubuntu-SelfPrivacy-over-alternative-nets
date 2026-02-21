@@ -9,6 +9,7 @@
 #   ./build-and-run.sh --app-android    # Build & deploy app to Android device
 #   ./build-and-run.sh --trust-cert     # Trust VM cert on Ubuntu
 #   ./build-and-run.sh --trust-cert-android  # Push VM cert to Android device
+#   ./build-and-run.sh --proxy              # Local reverse proxy to .onion (browse at localhost)
 #   ./build-and-run.sh --status             # Check VM, Tor, and all services
 #   ./build-and-run.sh --get-onion-private-key  # Export Tor key (base64)
 #
@@ -195,6 +196,149 @@ case "${1:-}" in
         shift
         exec bash "$SCRIPT_DIR/../scripts/trust-cert-android.sh" "$@"
         ;;
+    --proxy)
+        require_vm
+        LOCAL_PORT="${2:-8443}"
+
+        # Kill any existing proxy on this port (clean slate)
+        EXISTING_PID=$(lsof -ti :"$LOCAL_PORT" 2>/dev/null || true)
+        if [ -n "$EXISTING_PID" ]; then
+            echo -e "  ${YELLOW}Killing existing proxy on port $LOCAL_PORT (PID $EXISTING_PID)...${NC}"
+            kill $EXISTING_PID 2>/dev/null || true
+            sleep 1
+        fi
+
+        # Verify Tor is running on host
+        if ! ss -tlnp 2>/dev/null | grep -q ':9050 '; then
+            echo -e "${RED}Tor is not running on host port 9050.${NC}"
+            echo -e "  ${CYAN}sudo systemctl start tor${NC}"
+            exit 1
+        fi
+
+        # Fresh cert from current VM state
+        CERT_DIR=$(mktemp -d)
+        trap "rm -rf $CERT_DIR" EXIT
+        do_ssh_cmd cat /etc/ssl/selfprivacy/cert.pem > "$CERT_DIR/cert.pem" 2>/dev/null
+        do_ssh_cmd cat /etc/ssl/selfprivacy/key.pem > "$CERT_DIR/key.pem" 2>/dev/null
+
+        # If we couldn't get the VM's cert, generate a throwaway self-signed one
+        if [ ! -s "$CERT_DIR/cert.pem" ] || [ ! -s "$CERT_DIR/key.pem" ]; then
+            echo -e "  ${YELLOW}Could not fetch VM cert, generating local self-signed cert...${NC}"
+            openssl req -x509 -newkey rsa:2048 -keyout "$CERT_DIR/key.pem" \
+                -out "$CERT_DIR/cert.pem" -days 30 -nodes \
+                -subj "/CN=localhost" 2>/dev/null
+        fi
+
+        # Quick sanity check: can we reach the .onion?
+        echo -e "  ${YELLOW}Verifying Tor connectivity to $ONION...${NC}"
+        VERIFY_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+            --socks5-hostname 127.0.0.1:9050 \
+            -k "https://$ONION/api/version" 2>/dev/null) || true
+        VERIFY_CODE="${VERIFY_CODE:-000}"
+        if [ "$VERIFY_CODE" = "000" ]; then
+            echo -e "  ${RED}Cannot reach .onion over Tor. Is the VM fully booted?${NC}"
+            echo -e "  Try: ${CYAN}./build-and-run.sh --status${NC}"
+            exit 1
+        fi
+        echo -e "  ${GREEN}Tor connectivity OK${NC}"
+
+        echo ""
+        echo -e "${GREEN}Starting local reverse proxy to .onion services via Tor${NC}"
+        echo ""
+        echo -e "  .onion:  ${CYAN}$ONION${NC}"
+        echo -e "  Proxy:   ${CYAN}https://localhost:$LOCAL_PORT${NC}"
+        echo ""
+        echo -e "  ${BOLD}Open in your browser:${NC}"
+        echo -e "    Nextcloud   ${CYAN}https://localhost:$LOCAL_PORT/nextcloud/${NC}"
+        echo -e "    Gitea       ${CYAN}https://localhost:$LOCAL_PORT/git/${NC}"
+        echo -e "    Jitsi       ${CYAN}https://localhost:$LOCAL_PORT/jitsi/${NC}"
+        echo -e "    Prometheus  ${CYAN}https://localhost:$LOCAL_PORT/prometheus/${NC}"
+        echo -e "    API         ${CYAN}https://localhost:$LOCAL_PORT/api/version${NC}"
+        echo ""
+        echo -e "  ${YELLOW}Accept the self-signed certificate warning in Firefox to proceed.${NC}"
+        echo -e "  ${YELLOW}Press Ctrl+C to stop.${NC}"
+        echo ""
+
+        python3 -u - "$ONION" "$LOCAL_PORT" "$CERT_DIR/cert.pem" "$CERT_DIR/key.pem" <<'PYEOF'
+import sys, ssl, http.server
+import requests
+
+ONION = sys.argv[1]
+PORT = int(sys.argv[2])
+CERTFILE = sys.argv[3]
+KEYFILE = sys.argv[4]
+LOCAL_ORIGIN = f"https://localhost:{PORT}"
+ONION_ORIGIN = f"https://{ONION}"
+
+session = requests.Session()
+session.proxies = {"https": "socks5h://127.0.0.1:9050", "http": "socks5h://127.0.0.1:9050"}
+session.verify = False
+
+# Suppress InsecureRequestWarning
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+HOP_HEADERS = frozenset(["transfer-encoding", "connection", "keep-alive",
+                          "te", "trailers", "upgrade", "content-encoding"])
+
+class ProxyHandler(http.server.BaseHTTPRequestHandler):
+    def do_request(self):
+        url = f"{ONION_ORIGIN}{self.path}"
+        headers = {k: v for k, v in self.headers.items()
+                   if k.lower() not in ("host",)}
+        headers["Host"] = ONION
+
+        body = None
+        length = self.headers.get("Content-Length")
+        if length:
+            body = self.rfile.read(int(length))
+
+        try:
+            resp = session.request(self.command, url, headers=headers,
+                                   data=body, allow_redirects=False,
+                                   timeout=60, stream=True)
+        except Exception as e:
+            self.send_error(502, f"Proxy error: {e}")
+            return
+
+        self.send_response_only(resp.status_code)
+        data = resp.content
+
+        for k, v in resp.headers.items():
+            if k.lower() in HOP_HEADERS or k.lower() == "content-length":
+                continue
+            if k.lower() == "location":
+                v = v.replace(ONION_ORIGIN, LOCAL_ORIGIN)
+                v = v.replace(f"http://{ONION}", LOCAL_ORIGIN)
+            self.send_header(k, v)
+
+        # Rewrite .onion references in response body
+        data = data.replace(ONION_ORIGIN.encode(), LOCAL_ORIGIN.encode())
+        data = data.replace(ONION.encode(), f"localhost:{PORT}".encode())
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    do_GET = do_POST = do_PUT = do_DELETE = do_PATCH = do_HEAD = do_OPTIONS = do_request
+    do_PROPFIND = do_PROPPATCH = do_MKCOL = do_COPY = do_MOVE = do_LOCK = do_UNLOCK = do_REPORT = do_request
+
+    def log_message(self, fmt, *args):
+        sys.stderr.write(f"  {args[0]}\n")
+        sys.stderr.flush()
+
+server = http.server.HTTPServer(("127.0.0.1", PORT), ProxyHandler)
+server_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+server_ctx.load_cert_chain(CERTFILE, KEYFILE)
+server.socket = server_ctx.wrap_socket(server.socket, server_side=True)
+print(f"  Listening on https://127.0.0.1:{PORT} -> {ONION}:443 via Tor")
+
+try:
+    server.serve_forever()
+except KeyboardInterrupt:
+    print("\n  Proxy stopped.")
+    server.server_close()
+PYEOF
+        ;;
     --status)
         echo ""
         echo -e "${BOLD}SelfPrivacy Tor VM — Status Check${NC}"
@@ -280,6 +424,7 @@ case "${1:-}" in
         echo "  --app-android        Build & deploy SelfPrivacy app to Android device"
         echo "  --trust-cert         Trust the VM's self-signed cert on Ubuntu"
         echo "  --trust-cert-android Push the VM's cert to Android device"
+        echo "  --proxy [PORT]       Local reverse proxy (default 8443) — browse .onion at localhost"
         echo "  --status             Check VM, Tor, and all services"
         echo "  --get-onion-private-key  Export Tor private key (base64, for KeePass)"
         echo "  --record-gif-app-linux   Record demo GIF of Linux app setup"
