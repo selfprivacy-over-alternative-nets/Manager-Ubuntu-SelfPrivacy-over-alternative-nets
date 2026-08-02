@@ -165,9 +165,8 @@ if $NEED_FLUTTER || $NEED_ANDROID_SDK || $NEED_AGG; then
     echo -e "${BOLD}SDKs/tools to install manually:${NC}"
 
     if $NEED_FLUTTER; then
-        echo -e "  ${YELLOW}Flutter SDK${NC} — install to /opt/flutter:"
-        echo -e "    ${CYAN}curl -L https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.2-stable.tar.xz | sudo tar xJf - -C /opt${NC}"
-        echo -e "    ${CYAN}echo 'export PATH=\"/opt/flutter/bin:\$PATH\"' >> ~/.bashrc && source ~/.bashrc${NC}"
+        echo -e "  ${YELLOW}Flutter SDK${NC}:"
+        echo -e "    ${CYAN}sudo snap install flutter --classic${NC}"
     fi
 
     if $NEED_ANDROID_SDK; then
