@@ -61,7 +61,11 @@ done
 # ── Helpers ───────────────────────────────────────────────────────────────
 APT_PACKAGES=""
 MISSING_TOOLS=""
-MISSING_SDKS=""
+
+# Individual flags per SDK (avoids word-splitting bugs with multi-word names)
+NEED_FLUTTER=false
+NEED_ANDROID_SDK=false
+NEED_AGG=false
 
 need_apt() {
     local pkg="$1"
@@ -80,14 +84,6 @@ need_apt_lib() {
     fi
 }
 
-check_sdk() {
-    local name="$1"
-    local cmd="$2"
-    if ! command -v "$cmd" &>/dev/null; then
-        MISSING_SDKS="$MISSING_SDKS $name"
-    fi
-}
-
 # ══════════════════════════════════════════════════════════════════════════
 # COLLECT REQUIREMENTS
 # ══════════════════════════════════════════════════════════════════════════
@@ -103,7 +99,7 @@ fi
 
 # ── Flutter SDK (shared by Linux & Android) ──────────────────────────────
 if $INSTALL_APP_LINUX || $INSTALL_APP_ANDROID; then
-    check_sdk "Flutter SDK" flutter
+    if ! command -v flutter &>/dev/null; then NEED_FLUTTER=true; fi
     need_apt git git
     need_apt curl curl
     need_apt unzip unzip
@@ -129,7 +125,7 @@ fi
 
 # ── Android app ──────────────────────────────────────────────────────────
 if $INSTALL_APP_ANDROID; then
-    check_sdk "Android SDK" adb
+    if ! command -v adb &>/dev/null; then NEED_ANDROID_SDK=true; fi
 fi
 
 # ── GIF recording ────────────────────────────────────────────────────────
@@ -139,7 +135,7 @@ if $INSTALL_GIFS; then
     need_apt ffmpeg ffmpeg
     need_apt gifsicle gifsicle
     need_apt xdotool xdotool
-    check_sdk "agg (asciinema GIF generator)" agg
+    if ! command -v agg &>/dev/null; then NEED_AGG=true; fi
 fi
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -149,7 +145,12 @@ fi
 # Deduplicate apt packages
 APT_PACKAGES=$(echo "$APT_PACKAGES" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)
 
-if [ -z "$APT_PACKAGES" ] && [ -z "$MISSING_SDKS" ]; then
+ANY_MISSING=false
+if [ -n "$APT_PACKAGES" ] || $NEED_FLUTTER || $NEED_ANDROID_SDK || $NEED_AGG; then
+    ANY_MISSING=true
+fi
+
+if ! $ANY_MISSING; then
     echo -e "${GREEN}All dependencies are installed.${NC}"
     exit 0
 fi
@@ -159,34 +160,33 @@ if [ -n "$APT_PACKAGES" ]; then
     echo -e "${BOLD}APT packages needed:${NC} ${CYAN}$APT_PACKAGES${NC}"
 fi
 
-if [ -n "$MISSING_SDKS" ]; then
+if $NEED_FLUTTER || $NEED_ANDROID_SDK || $NEED_AGG; then
     echo ""
     echo -e "${BOLD}SDKs/tools to install manually:${NC}"
-    for sdk in $MISSING_SDKS; do
-        case "$sdk" in
-            "Flutter SDK")
-                echo -e "  ${YELLOW}Flutter SDK${NC} — install to /opt/flutter:"
-                echo -e "    ${CYAN}curl -L https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.2-stable.tar.xz | sudo tar xJf - -C /opt${NC}"
-                echo -e "    ${CYAN}echo 'export PATH=\"/opt/flutter/bin:\$PATH\"' >> ~/.bashrc && source ~/.bashrc${NC}"
-                ;;
-            "Android SDK")
-                echo -e "  ${YELLOW}Android SDK${NC} — install Android Studio or command-line tools:"
-                echo -e "    ${CYAN}mkdir -p ~/Android/Sdk && cd ~/Android/Sdk${NC}"
-                echo -e "    ${CYAN}curl -sL \"https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip\" -o cmdline-tools.zip${NC}"
-                echo -e "    ${CYAN}unzip cmdline-tools.zip && mkdir -p cmdline-tools && mv cmdline-tools cmdline-tools/latest${NC}"
-                echo -e "    ${CYAN}export ANDROID_HOME=~/Android/Sdk${NC}"
-                echo -e "    ${CYAN}yes | \$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses${NC}"
-                echo -e "    ${CYAN}\$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \"platforms;android-35\" \"build-tools;36.1.0\" \"platform-tools\"${NC}"
-                echo -e "    ${CYAN}flutter config --android-sdk ~/Android/Sdk${NC}"
-                ;;
-            "agg (asciinema GIF generator)")
-                echo -e "  ${YELLOW}agg${NC} — asciinema GIF generator:"
-                echo -e "    ${CYAN}mkdir -p ~/.local/bin${NC}"
-                echo -e "    ${CYAN}curl -sL -o ~/.local/bin/agg https://github.com/asciinema/agg/releases/latest/download/agg-x86_64-unknown-linux-gnu${NC}"
-                echo -e "    ${CYAN}chmod +x ~/.local/bin/agg${NC}"
-                ;;
-        esac
-    done
+
+    if $NEED_FLUTTER; then
+        echo -e "  ${YELLOW}Flutter SDK${NC} — install to /opt/flutter:"
+        echo -e "    ${CYAN}curl -L https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.2-stable.tar.xz | sudo tar xJf - -C /opt${NC}"
+        echo -e "    ${CYAN}echo 'export PATH=\"/opt/flutter/bin:\$PATH\"' >> ~/.bashrc && source ~/.bashrc${NC}"
+    fi
+
+    if $NEED_ANDROID_SDK; then
+        echo -e "  ${YELLOW}Android SDK${NC} — install command-line tools:"
+        echo -e "    ${CYAN}mkdir -p ~/Android/Sdk && cd ~/Android/Sdk${NC}"
+        echo -e "    ${CYAN}curl -sL \"https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip\" -o cmdline-tools.zip${NC}"
+        echo -e "    ${CYAN}unzip cmdline-tools.zip && mkdir -p cmdline-tools && mv cmdline-tools cmdline-tools/latest${NC}"
+        echo -e "    ${CYAN}export ANDROID_HOME=~/Android/Sdk${NC}"
+        echo -e "    ${CYAN}yes | \$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses${NC}"
+        echo -e "    ${CYAN}\$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \"platforms;android-35\" \"build-tools;36.1.0\" \"platform-tools\"${NC}"
+        echo -e "    ${CYAN}flutter config --android-sdk ~/Android/Sdk${NC}"
+    fi
+
+    if $NEED_AGG; then
+        echo -e "  ${YELLOW}agg${NC} — asciinema GIF generator:"
+        echo -e "    ${CYAN}mkdir -p ~/.local/bin${NC}"
+        echo -e "    ${CYAN}curl -sL -o ~/.local/bin/agg https://github.com/asciinema/agg/releases/latest/download/agg-x86_64-unknown-linux-gnu${NC}"
+        echo -e "    ${CYAN}chmod +x ~/.local/bin/agg${NC}"
+    fi
 fi
 
 if $CHECK_ONLY; then
@@ -221,7 +221,7 @@ if $INSTALL_GIFS && ! command -v agg &>/dev/null; then
 fi
 
 # ── SDK reminders ────────────────────────────────────────────────────────
-if [ -n "$MISSING_SDKS" ]; then
+if $NEED_FLUTTER || $NEED_ANDROID_SDK || $NEED_AGG; then
     echo ""
     echo -e "${YELLOW}Manual SDK installation still needed (see instructions above).${NC}"
     exit 1
