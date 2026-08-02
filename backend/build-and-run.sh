@@ -159,15 +159,27 @@ case "${1:-}" in
     --app-linux)
         require_vm
         FLUTTER_DIR="$SCRIPT_DIR/../flutter-app/selfprivacy.org.app"
-        if ! command -v flutter &>/dev/null; then
+        # Prefer the real flutter binary; the snap wrapper (via /snap/bin/flutter)
+        # silently exits 255 when launched from a subprocess without snap env vars.
+        FLUTTER_BIN=""
+        for candidate in \
+            "$HOME/snap/flutter/common/flutter/bin/flutter" \
+            "/opt/flutter/bin/flutter" \
+            "$(command -v flutter 2>/dev/null)"; do
+            if [ -x "$candidate" ]; then
+                FLUTTER_BIN="$candidate"
+                break
+            fi
+        done
+        if [ -z "$FLUTTER_BIN" ]; then
             echo -e "${RED}Flutter SDK not found. Run: ${CYAN}./scripts/requirements.sh --app-linux${NC}" >&2
             exit 1
         fi
         echo -e "${YELLOW}Building Flutter Linux app...${NC}"
         echo -e "  .onion: ${CYAN}$ONION${NC}"
         cd "$FLUTTER_DIR"
-        flutter pub get --no-example
-        flutter build linux --debug \
+        "$FLUTTER_BIN" pub get --no-example
+        "$FLUTTER_BIN" build linux --debug \
             --dart-define=ONION_DOMAIN="$ONION" \
             --dart-define=API_TOKEN=test-token-for-tor-development
         BINARY="build/linux/x64/debug/bundle/selfprivacy"
