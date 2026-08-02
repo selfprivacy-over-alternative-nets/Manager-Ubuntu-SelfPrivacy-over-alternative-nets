@@ -33,10 +33,14 @@ VM_MEMORY=2048
 VM_CPUS=2
 VM_DISK_SIZE=10240
 SSH_PORT=2222
-GITHUB_REPO="selfprivacy-over-tor/Manager-Ubuntu-SelfPrivacy-Over-Tor"
+GITHUB_REPO="selfprivacy-over-alternative-nets/Manager-Ubuntu-SelfPrivacy-Over-alternative-nets"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Enable nix experimental features for this process without touching system config.
+# Required for `nix build` / `nix flake` commands (nix-command + flakes).
+export NIX_CONFIG="experimental-features = nix-command flakes"
 
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no -o PreferredAuthentications=password -o LogLevel=ERROR"
 
