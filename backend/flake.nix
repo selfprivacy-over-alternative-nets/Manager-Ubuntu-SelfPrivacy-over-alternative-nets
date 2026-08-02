@@ -724,30 +724,48 @@
         };
 
         # Create writable sp-modules/flake.nix on first boot
-        # The SelfPrivacy API's FlakeServiceManager reads and writes this file
+        # FlakeServiceManager (upstream ≥3.8.0) reads /etc/nixos/flake.nix directly.
+        # Inputs prefixed "sp-module-" are treated as installed services.
+        # The legacy /etc/nixos/sp-modules/ directory must NOT exist — its presence
+        # triggers MergeSpModulesFlake migration and blocks all FSM writes.
         systemd.services.selfprivacy-init-sp-modules = {
-          description = "Initialize writable SelfPrivacy sp-modules";
+          description = "Initialize writable SelfPrivacy flake.nix with service modules";
           wantedBy = [ "multi-user.target" ];
           before = [ "selfprivacy-api.service" ];
           serviceConfig.Type = "oneshot";
           serviceConfig.RemainAfterExit = true;
           script = ''
-            mkdir -p /etc/nixos/sp-modules
-            if [ ! -f /etc/nixos/sp-modules/flake.nix ]; then
-              cat > /etc/nixos/sp-modules/flake.nix << 'EOFLAKE'
+            mkdir -p /etc/nixos
+            if [ ! -f /etc/nixos/flake.nix ]; then
+              cat > /etc/nixos/flake.nix << 'EOFLAKE'
             {
-              description = "SelfPrivacy NixOS PoC modules/extensions/bundles/packages/etc";
+              description = "SelfPrivacy NixOS configuration";
 
-              inputs.nextcloud.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/nextcloud";
-              inputs.gitea.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/gitea";
-              inputs.jitsi-meet.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/jitsi-meet";
-              inputs.matrix.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/matrix";
-              inputs.monitoring.url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/monitoring";
+              inputs = {
+                selfprivacy-nixos-config = {
+                  url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes";
+                };
+                sp-module-nextcloud = {
+                  url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/nextcloud";
+                };
+                sp-module-gitea = {
+                  url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/gitea";
+                };
+                sp-module-jitsi-meet = {
+                  url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/jitsi-meet";
+                };
+                sp-module-matrix = {
+                  url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/matrix";
+                };
+                sp-module-monitoring = {
+                  url = "git+https://git.selfprivacy.org/SelfPrivacy/selfprivacy-nixos-config.git?ref=flakes&dir=sp-modules/monitoring";
+                };
+              };
 
-              outputs = _: { };
+              outputs = _: {};
             }
             EOFLAKE
-              chmod 644 /etc/nixos/sp-modules/flake.nix
+              chmod 644 /etc/nixos/flake.nix
             fi
 
             # Create suggested modules file for the API's enable() method
