@@ -967,6 +967,10 @@
       };
     in
     {
+      # Minimal NixOS module for external consumers (e.g. selfprivacy-tor-tests).
+      # Requires selfprivacy-api-package to be passed via specialArgs or _module.args.
+      nixosModules.default = import ./nixos/selfprivacy-tor-core.nix;
+
       # NixOS configuration for installation
       nixosConfigurations.selfprivacy-tor-vm = nixpkgs.lib.nixosSystem {
         inherit system;
