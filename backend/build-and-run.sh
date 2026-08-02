@@ -166,11 +166,10 @@ case "${1:-}" in
         echo -e "${YELLOW}Building Flutter Linux app...${NC}"
         echo -e "  .onion: ${CYAN}$ONION${NC}"
         cd "$FLUTTER_DIR"
-        flutter pub get --no-example 2>/dev/null
+        flutter pub get --no-example
         flutter build linux --debug \
             --dart-define=ONION_DOMAIN="$ONION" \
-            --dart-define=API_TOKEN=test-token-for-tor-development \
-            2>&1 | tail -5
+            --dart-define=API_TOKEN=test-token-for-tor-development
         BINARY="build/linux/x64/debug/bundle/selfprivacy"
         if [ ! -f "$BINARY" ]; then
             echo -e "${RED}Build failed — binary not found.${NC}" >&2
