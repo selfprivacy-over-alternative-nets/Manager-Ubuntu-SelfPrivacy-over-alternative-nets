@@ -971,6 +971,67 @@
       # Requires selfprivacy-api-package to be passed via specialArgs or _module.args.
       nixosModules.default = import ./nixos/selfprivacy-tor-core.nix;
 
+      # Minimal NixOS module for public HTTPS operation (non-Tor).
+      # Requires: selfprivacy-api-package, selfprivacy-domain via specialArgs or _module.args.
+      # Uses a self-signed cert by default; production users should configure security.acme.
+      nixosModules.https = import ./nixos/selfprivacy-https-core.nix;
+
+      # NixOS configuration for HTTPS VM (set your domain in specialArgs).
+      # For production: add security.acme configuration and remove the
+      # selfprivacy-generate-https-cert service override.
+      nixosConfigurations.selfprivacy-https-vm = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = {
+          selfprivacy-api-package = selfprivacy-api.packages.${system}.default;
+          # Replace with your actual public domain:
+          selfprivacy-domain = "example.com";
+        };
+        modules = [
+          (import ./nixos/selfprivacy-https-core.nix)
+          ({ modulesPath, pkgs, lib, ... }: {
+            imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
+            system.stateVersion = "25.11";
+            networking.hostName = "selfprivacy-https";
+
+            boot.loader.grub.enable = true;
+            boot.loader.grub.device = "/dev/sda";
+            fileSystems."/" = {
+              device = "/dev/disk/by-label/nixos";
+              fsType = "ext4";
+            };
+            virtualisation.virtualbox.guest.enable = true;
+
+            users.users.root = {
+              initialHashedPassword = "";
+              password = null;
+            };
+            services.openssh = {
+              enable = true;
+              settings = {
+                PermitRootLogin = "yes";
+                PermitEmptyPasswords = "yes";
+              };
+            };
+            security.pam.services.sshd.allowNullPassword = true;
+
+            services.getty.helpLine = lib.mkForce ''
+
+              =====================================================
+              SelfPrivacy HTTPS VM
+
+              API:  https://api.example.com/api/version
+              GraphQL:  https://api.example.com/graphql
+
+              Certs: /etc/ssl/selfprivacy-https/  (self-signed)
+              For production: configure security.acme
+
+              Default login: root (no password)
+              =====================================================
+            '';
+          })
+        ];
+      };
+
       # NixOS configuration for installation
       nixosConfigurations.selfprivacy-tor-vm = nixpkgs.lib.nixosSystem {
         inherit system;
