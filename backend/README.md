@@ -1,13 +1,25 @@
-# SelfPrivacy NixOS Backend over Tor (VirtualBox)
+# SelfPrivacy NixOS Backend over Tor
 
-This folder contains the NixOS configuration to deploy a full SelfPrivacy backend accessible via Tor hidden service (.onion address) in VirtualBox.
+This folder contains the NixOS configuration to deploy a full SelfPrivacy backend accessible via a
+Tor hidden service (`.onion` address).
+
+It supports the **two backend deployment methods** from the [main README's scenario
+map](../README.md#which-setup-are-you-doing):
+
+- **Method 1 — Ubuntu + VirtualBox** (scenarios **S.A**): scripted, runs the backend inside a
+  VirtualBox VM. This is the default, fully-automated path.
+- **Method 2 — Native NixOS** (scenarios **S.B / S.C**): import the exported NixOS module directly
+  onto a NixOS host — no VM.
+
+The client side (Linux/Android app, browser) is covered in the [main README](../README.md); this
+file is only about deploying the backend.
 
 ## What This Does
 
 - Deploys the **real** SelfPrivacy GraphQL API (fetched from upstream)
-- Configures Tor hidden service to expose all services via .onion address
+- Configures a Tor hidden service to expose all services via a `.onion` address
 - Sets up Redis, Nginx, and all required services
-- Runs in VirtualBox on Ubuntu (or any Linux host)
+- Runs either in VirtualBox (Method 1) or natively on NixOS (Method 2)
 
 ## Integrated Services
 
@@ -57,7 +69,9 @@ Enable flakes in `~/.config/nix/nix.conf`:
 experimental-features = nix-command flakes
 ```
 
-## A. Automatic Deployment (One Command)
+## Method 1 — Ubuntu + VirtualBox
+
+### Automatic (one command)
 
 ```bash
 ./build-and-run.sh 2>&1 | tee /tmp/backend-build.log
@@ -70,9 +84,11 @@ This script:
 4. Starts Tor hidden service
 5. Outputs the .onion address
 
-## B. Manual Deployment Steps
+### Manual VirtualBox steps
 
-### Step 1: Build the NixOS ISO
+Do these only if you want to run the VirtualBox install by hand instead of via `build-and-run.sh`.
+
+#### Step 1: Build the NixOS ISO
 
 ```bash
 nix build .#default
@@ -80,7 +96,7 @@ nix build .#default
 
 This creates `result/iso/nixos-*.iso`.
 
-### Step 2: Create VirtualBox VM
+#### Step 2: Create VirtualBox VM
 
 ```bash
 VM_NAME="SelfPrivacy-Tor-Test"
@@ -94,7 +110,7 @@ VBoxManage storagectl "$VM_NAME" --name "IDE Controller" --add ide
 VBoxManage storageattach "$VM_NAME" --storagectl "IDE Controller" --port 0 --device 0 --type dvddrive --medium result/iso/nixos-*.iso
 ```
 
-### Step 3: Start VM and Install
+#### Step 3: Start VM and Install
 
 ```bash
 VBoxManage startvm "$VM_NAME" --type headless
@@ -124,20 +140,57 @@ nixos-install --flake /mnt/etc/nixos#selfprivacy-tor-vm --no-root-passwd
 reboot
 ```
 
-### Step 4: Remove ISO and Restart
+#### Step 4: Remove ISO and Restart
 
 ```bash
 VBoxManage storageattach "$VM_NAME" --storagectl "IDE Controller" --port 0 --device 0 --type dvddrive --medium emptydrive
 VBoxManage startvm "$VM_NAME" --type headless
 ```
 
-### Step 5: Get .onion Address
+#### Step 5: Get .onion Address
 
 ```bash
 sshpass -p '' ssh -o StrictHostKeyChecking=no -p 2222 root@localhost cat /var/lib/tor/hidden_service/hostname
 ```
 
-## C. Viewing Backend Logs
+## Method 2 — Native NixOS (advanced)
+
+Run the backend **directly on a NixOS host**, with no VirtualBox VM (scenarios **S.B / S.C**). Import
+the exported module into your own system configuration:
+
+```nix
+# flake input:
+#   manager.url = "github:selfprivacy-over-tor/Manager-Ubuntu-SelfPrivacy-Over-Tor?dir=backend";
+{
+  imports = [ manager.nixosModules.default ];   # Tor HS + selfprivacy-api + worker + redis + nginx
+  # Required module arg — the SelfPrivacy API package derivation:
+  _module.args.selfprivacy-api-package =
+    manager.packages.x86_64-linux.selfprivacy-graphql-api;
+}
+```
+
+Then `sudo nixos-rebuild switch`. Read the `.onion` afterwards with
+`sudo cat /var/lib/tor/hidden_service/hostname`.
+
+Notes:
+- The module (`nixos/selfprivacy-tor-core.nix`) provides only the core stack. It does **not** bundle
+  the full Nextcloud/Forgejo/Matrix/Jitsi service set — those are defined in `flake.nix` for the VM
+  and must be added to your own config if you want them.
+- There is also `nixosModules.https` (`nixos/selfprivacy-https-core.nix`) for domain-based HTTPS
+  instead of Tor.
+- The module does not seed an API token; provision one in your own config. The VM's demo token in
+  `flake.nix` (`/etc/selfprivacy/secrets.json`) is for testing only.
+- This path is exercised mainly by the automated NixOS VM tests — see
+  [`selfprivacy-tor-tests`](../../selfprivacy-tor-tests/README.md).
+
+For a native host, run the log/status/`curl` commands below **directly on the host** (drop the
+`sshpass -p '' ssh -p 2222 root@localhost` prefix).
+
+## Viewing Backend Logs
+
+> The commands below assume the **Method 1 (VirtualBox)** VM and reach it over SSH. For a **Method 2
+> (native NixOS)** backend, run the same `journalctl` / `systemctl` / `curl` commands directly on the
+> host without the `sshpass … ssh` prefix.
 
 ### Live API Request Logs
 
