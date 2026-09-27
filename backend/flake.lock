@@ -29,11 +29,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1785664169,
-        "narHash": "sha256-Vqjqdxgz85yxbQzPLdzVyzJ88fUwrrV7/Cgv6TOm8XM=",
+        "lastModified": 1790539182,
+        "narHash": "sha256-PRi8if4hM+4wiU2FVz3Ko9y6sCaW8RGzlGbHw7Wse1k=",
         "ref": "tor-support",
-        "rev": "1b1cbffaa0d94a86c52a35fbee8c2f481355511b",
-        "revCount": 2029,
+        "rev": "12b250df2601093a358673162d4121e7908681c9",
+        "revCount": 2033,
         "type": "git",
         "url": "https://github.com/selfprivacy-over-alternative-nets/selfprivacy-api.git"
       },

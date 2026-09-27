@@ -74,6 +74,7 @@ in
       gitMinimal
       iproute2
       util-linux
+      nix # nix-store/nix-env for the garbage-collector job (jobs/nix_collect_garbage.py)
     ];
     serviceConfig = {
       User = "root";
@@ -100,6 +101,7 @@ in
       gitMinimal
       iproute2
       util-linux
+      nix # nix-store/nix-env for the garbage-collector job (jobs/nix_collect_garbage.py)
     ];
     serviceConfig = {
       User = "root";
@@ -182,6 +184,9 @@ in
 
       locations."/graphql" = {
         proxyPass = "http://127.0.0.1:5050";
+        # WebSocket upgrade so GraphQL subscriptions (jobs/logs over wss://.../graphql)
+        # connect instead of being served as a plain GET.
+        proxyWebsockets = true;
         extraConfig = ''
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
