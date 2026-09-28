@@ -56,320 +56,100 @@
 
       # SelfPrivacy module for Tor-only testing with integrated services
       selfprivacyTorModule = { config, pkgs, lib, ... }:
-      let
-        redis-sp-api-srv-name = "sp-api";
-        selfprivacy-graphql-api = selfprivacy-api.packages.${system}.default;
-        workerPython = pkgs.python312.withPackages (ps: [ selfprivacy-graphql-api ps.huey ]);
-      in
       {
+        # Core (Tor hidden service, redis, selfprivacy-api + huey worker, self-signed
+        # cert-gen, the base onion nginx vhost + shared service routes, and the
+        # firewall) is provided by the shared file module — the same one that
+        # pcname-deploy and nixosModules.default consume. Only the full service
+        # stacks and the VM-specific nginx locations remain inline below.
+        imports = [ ./nixos/selfprivacy-tor-core.nix ];
+
+        # The core module takes the API package as a module argument.
+        _module.args.selfprivacy-api-package = selfprivacy-api.packages.${system}.default;
+
         # Basic system
         system.stateVersion = "25.11";
         networking.hostName = "selfprivacy-tor";
-        time.timeZone = "UTC";
 
-        # Enable Tor with hidden service
-        services.tor = {
-          enable = true;
-          settings = {
-            HiddenServiceDir = "/var/lib/tor/hidden_service";
-            HiddenServicePort = [
-              "443 127.0.0.1:443"
-            ];
+        # (selfprivacy-api, its huey worker, and the self-signed cert-gen service
+        # now come from ./nixos/selfprivacy-tor-core.nix.)
+
+        # nginx: the base onion vhost (listen/TLS/default) and all shared service
+        # routes (/graphql with WS upgrade, /api, /prometheus[/api], /git[/],
+        # /_matrix, = /nextcloud) come from ./nixos/selfprivacy-tor-core.nix. Only
+        # the VM-specific locations are added here and merge onto the core's vhost.
+        services.nginx.virtualHosts."onion" = {
+          # Landing page.
+          locations."/" = {
+            root = pkgs.writeTextDir "index.html" ''
+              <!DOCTYPE html>
+              <html>
+              <head><title>SelfPrivacy Tor Test</title></head>
+              <body>
+                <h1>SelfPrivacy over Tor - Real Backend</h1>
+                <p>This server is running the actual SelfPrivacy GraphQL API.</p>
+                <p>Your .onion address is in: <code>/var/lib/tor/hidden_service/hostname</code></p>
+                <h2>API Endpoints:</h2>
+                <ul>
+                  <li><a href="/graphql">GraphQL API</a></li>
+                  <li><a href="/api/version">API Version</a></li>
+                </ul>
+              </body>
+              </html>
+            '';
+            index = "index.html";
           };
-        };
 
-        # Redis for SelfPrivacy API
-        services.redis.package = pkgs.valkey;
-        services.redis.servers.${redis-sp-api-srv-name} = {
-          enable = true;
-          save = [
-            [ 30 1 ]
-            [ 10 10 ]
-          ];
-          port = 0; # Unix socket only
-          settings = {
-            notify-keyspace-events = "KEA";
+          # Jitsi Meet static files - served from the jitsi-meet package.
+          # Overrides the core module's placeholder proxyPass: the VM serves the
+          # real static bundle, and nothing listens on the core's :9090 here.
+          # Both location and alias must end with / to prevent path traversal.
+          locations."/jitsi/" = {
+            proxyPass = lib.mkForce null;
+            extraConfig = lib.mkForce "";
+            alias = "${pkgs.jitsi-meet}/";
+            index = "index.html";
           };
-        };
 
-        # User for API
-        users.users.selfprivacy-api = {
-          isSystemUser = true;
-          group = "selfprivacy-api";
-        };
-        users.groups.selfprivacy-api = {};
-        users.groups.redis-sp-api.members = [ "selfprivacy-api" "root" ];
-
-        # SelfPrivacy API service (simplified for testing)
-        systemd.services.selfprivacy-api = {
-          description = "SelfPrivacy GraphQL API";
-          after = [ "network-online.target" "redis-sp-api.service" ];
-          wants = [ "network-online.target" ];
-          wantedBy = [ "multi-user.target" ];
-          environment = {
-            HOME = "/root";
-            PYTHONUNBUFFERED = "1";
+          # Jitsi BOSH for XMPP
+          locations."/http-bind" = {
+            proxyPass = "http://127.0.0.1:5280/http-bind";
+            extraConfig = ''
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header Host $host;
+            '';
           };
-          path = with pkgs; [
-            coreutils
-            gnutar
-            xz.bin
-            gzip
-            gitMinimal
-            iproute2
-            util-linux
-          ];
-          serviceConfig = {
-            User = "root";
-            ExecStart = "${selfprivacy-graphql-api}/bin/app.py";
-            Restart = "always";
-            RestartSec = "5";
+
+          # Jitsi WebSocket for XMPP
+          locations."/xmpp-websocket" = {
+            proxyPass = "http://127.0.0.1:5280/xmpp-websocket";
+            extraConfig = ''
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
+              proxy_set_header Host $host;
+            '';
           };
-        };
 
-        # Huey worker for background tasks
-        systemd.services.selfprivacy-api-worker = {
-          description = "SelfPrivacy API Task Worker";
-          after = [ "network-online.target" "redis-sp-api.service" ];
-          wants = [ "network-online.target" ];
-          wantedBy = [ "multi-user.target" ];
-          environment = {
-            HOME = "/root";
-            PYTHONUNBUFFERED = "1";
-          };
-          path = with pkgs; [
-            coreutils
-            gnutar
-            xz.bin
-            gzip
-            gitMinimal
-            iproute2
-            util-linux
-          ];
-          serviceConfig = {
-            User = "root";
-            ExecStart = "${workerPython}/bin/python -m huey.bin.huey_consumer selfprivacy_api.task_registry.huey";
-            Restart = "always";
-            RestartSec = "5";
-          };
-        };
-
-        # Generate self-signed TLS certificate for .onion HTTPS
-        # Waits for Tor to generate the .onion hostname, then creates a cert
-        # with the actual hostname as SAN so clients can verify it.
-        systemd.services.selfprivacy-generate-ssl-cert = {
-          description = "Generate self-signed TLS certificate for .onion HTTPS";
-          wantedBy = [ "multi-user.target" ];
-          after = [ "tor.service" ];
-          before = [ "nginx.service" ];
-          serviceConfig.Type = "oneshot";
-          serviceConfig.RemainAfterExit = true;
-          path = [ pkgs.openssl pkgs.coreutils ];
-          script = ''
-            CERT_DIR="/etc/ssl/selfprivacy"
-            HOSTNAME_FILE="/var/lib/tor/hidden_service/hostname"
-            mkdir -p "$CERT_DIR"
-
-            # Wait for Tor to generate the .onion hostname (up to 60s)
-            for i in $(seq 1 60); do
-              [ -f "$HOSTNAME_FILE" ] && break
-              sleep 1
-            done
-
-            ONION_HOST=""
-            if [ -f "$HOSTNAME_FILE" ]; then
-              ONION_HOST=$(cat "$HOSTNAME_FILE" | tr -d '[:space:]')
-              echo "Onion hostname: $ONION_HOST"
-            else
-              echo "WARNING: Tor hostname not found, using wildcard SAN"
-            fi
-
-            # Regenerate if cert doesn't exist or if the onion hostname changed
-            NEED_REGEN=false
-            if [ ! -f "$CERT_DIR/cert.pem" ] || [ ! -f "$CERT_DIR/key.pem" ]; then
-              NEED_REGEN=true
-            elif [ -n "$ONION_HOST" ]; then
-              # Check if current cert already has the correct SAN
-              if ! openssl x509 -in "$CERT_DIR/cert.pem" -noout -text 2>/dev/null | grep -q "$ONION_HOST"; then
-                echo "Cert SAN does not match current onion hostname, regenerating"
-                NEED_REGEN=true
-              fi
-            fi
-
-            if [ "$NEED_REGEN" = true ]; then
-              SAN="DNS:*.onion"
-              [ -n "$ONION_HOST" ] && SAN="DNS:$ONION_HOST,DNS:*.onion"
-
-              openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
-                -days 397 -nodes \
-                -keyout "$CERT_DIR/key.pem" \
-                -out "$CERT_DIR/cert.pem" \
-                -subj "/CN=selfprivacy-tor" \
-                -addext "subjectAltName=$SAN" \
-                -addext "basicConstraints=critical,CA:TRUE"
-              chown root:nginx "$CERT_DIR/key.pem"
-              chmod 640 "$CERT_DIR/key.pem"
-              chmod 644 "$CERT_DIR/cert.pem"
-              echo "Generated self-signed TLS certificate with SAN=$SAN"
-            else
-              echo "TLS certificate already exists with correct SAN"
-            fi
+          # Nextcloud - override just the upstream Host header so the internal
+          # nextcloud.test.onion vhost (on :8081) matches; proxyPass and the rest
+          # come from the core module's /nextcloud/ location.
+          locations."/nextcloud/".extraConfig = lib.mkForce ''
+            proxy_set_header Host nextcloud.test.onion;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_redirect off;
+            client_max_body_size 512M;
           '';
-        };
 
-        # Nginx reverse proxy - HTTPS with self-signed cert for .onion
-        services.nginx = {
-          enable = true;
-
-          virtualHosts."onion" = {
-            listen = [{ addr = "0.0.0.0"; port = 443; ssl = true; }];
-            default = true;
-            onlySSL = true;
-            sslCertificate = "/etc/ssl/selfprivacy/cert.pem";
-            sslCertificateKey = "/etc/ssl/selfprivacy/key.pem";
-
-            locations."/" = {
-              root = pkgs.writeTextDir "index.html" ''
-                <!DOCTYPE html>
-                <html>
-                <head><title>SelfPrivacy Tor Test</title></head>
-                <body>
-                  <h1>SelfPrivacy over Tor - Real Backend</h1>
-                  <p>This server is running the actual SelfPrivacy GraphQL API.</p>
-                  <p>Your .onion address is in: <code>/var/lib/tor/hidden_service/hostname</code></p>
-                  <h2>API Endpoints:</h2>
-                  <ul>
-                    <li><a href="/graphql">GraphQL API</a></li>
-                    <li><a href="/api/version">API Version</a></li>
-                  </ul>
-                </body>
-                </html>
-              '';
-              index = "index.html";
-            };
-
-            # Proxy GraphQL to SelfPrivacy API
-            locations."/graphql" = {
-              proxyPass = "http://127.0.0.1:5050";
-              extraConfig = ''
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-              '';
-            };
-
-            # Proxy REST API endpoints
-            locations."/api" = {
-              proxyPass = "http://127.0.0.1:5050";
-              extraConfig = ''
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-              '';
-            };
-
-            # Proxy Prometheus UI
-            locations."/prometheus" = {
-              proxyPass = "http://127.0.0.1:9001";
-              extraConfig = ''
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-              '';
-            };
-
-            # Proxy Prometheus metrics endpoints
-            locations."/prometheus/api" = {
-              proxyPass = "http://127.0.0.1:9001/api";
-              extraConfig = ''
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-              '';
-            };
-
-            # Jitsi Meet static files - served from the jitsi-meet package
-            # Note: Both location and alias must end with / to prevent path traversal
-            locations."/jitsi/" = {
-              alias = "${pkgs.jitsi-meet}/";
-              index = "index.html";
-            };
-
-            # Jitsi BOSH for XMPP
-            locations."/http-bind" = {
-              proxyPass = "http://127.0.0.1:5280/http-bind";
-              extraConfig = ''
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header Host $host;
-              '';
-            };
-
-            # Jitsi WebSocket for XMPP
-            locations."/xmpp-websocket" = {
-              proxyPass = "http://127.0.0.1:5280/xmpp-websocket";
-              extraConfig = ''
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection "upgrade";
-                proxy_set_header Host $host;
-              '';
-            };
-
-            # Nextcloud - proxy to separate internal port (8081) with path stripping
-            # Trailing slashes on both location and proxy_pass strip the /nextcloud/ prefix
-            # Nextcloud's overwritewebroot="/nextcloud" handles URL generation in HTML
-            # proxy_redirect off since Nextcloud generates correct absolute URLs via overwrite settings
-            locations."/nextcloud/" = {
-              proxyPass = "http://127.0.0.1:8081/";
-              extraConfig = ''
-                proxy_set_header Host nextcloud.test.onion;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto https;
-                proxy_redirect off;
-                client_max_body_size 512M;
-              '';
-            };
-            # Redirect /nextcloud to /nextcloud/
-            locations."= /nextcloud" = {
-              return = "301 /nextcloud/";
-            };
-
-            # Forgejo/Gitea
-            # Use /git/ with trailing slash in location, and trailing slash in proxy_pass
-            # to properly strip the prefix when proxying
-            locations."/git/" = {
-              proxyPass = "http://127.0.0.1:3000/";
-              extraConfig = ''
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto https;
-              '';
-            };
-            # Redirect /git to /git/
-            locations."= /git" = {
-              return = "301 /git/";
-            };
-
-            # Matrix Synapse
-            locations."/_matrix" = {
-              proxyPass = "http://127.0.0.1:8008";
-              extraConfig = ''
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto https;
-                client_max_body_size 50M;
-              '';
-            };
-
-            # Matrix well-known endpoints
-            locations."/.well-known/matrix" = {
-              extraConfig = ''
-                default_type application/json;
-                add_header Access-Control-Allow-Origin *;
-                return 200 '{"m.homeserver": {"base_url": "https://synapse.test.onion"}, "m.server": "synapse.test.onion:443"}';
-              '';
-            };
+          # Matrix well-known endpoints
+          locations."/.well-known/matrix" = {
+            extraConfig = ''
+              default_type application/json;
+              add_header Access-Control-Allow-Origin *;
+              return 200 '{"m.homeserver": {"base_url": "https://synapse.test.onion"}, "m.server": "synapse.test.onion:443"}';
+            '';
           };
         };
 
@@ -403,25 +183,8 @@
         };
         security.pam.services.sshd.allowNullPassword = true;
 
-        # Ensure nginx starts after TLS cert is generated
-        systemd.services.nginx.after = [ "selfprivacy-generate-ssl-cert.service" ];
-        systemd.services.nginx.wants = [ "selfprivacy-generate-ssl-cert.service" ];
-
-        # Firewall - only allow local connections (Tor handles external)
-        networking.firewall = {
-          enable = true;
-          allowedTCPPorts = [ 22 ]; # SSH for local access
-        };
-
-        # Useful packages
-        environment.systemPackages = with pkgs; [
-          curl
-          htop
-          vim
-          tor
-          jq
-          valkey  # Redis CLI
-        ];
+        # (nginx cert ordering, the firewall — 22 + 443 — and the base system
+        # packages now come from ./nixos/selfprivacy-tor-core.nix.)
 
         # Display onion address after boot
         systemd.services.show-onion = {
