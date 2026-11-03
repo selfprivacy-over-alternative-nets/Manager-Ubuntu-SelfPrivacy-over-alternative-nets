@@ -30,6 +30,17 @@ in
   # ── Tor hidden service ───────────────────────────────────────────────────
   services.tor = {
     enable = true;
+    # The live Tor network's consensus REQUIRES the Desc=3 / Microdesc=3 protocols (Tor >= 0.4.9): the pinned
+    # nixpkgs (25.11.20260207) ships 0.4.8.22, which exits at start ("not supported by this version of Tor.
+    # You should upgrade") so the .onion never comes up. Build the current nixos-25.11 branch's Tor on our pin —
+    # the same derivation apart from version/source (same patch, flags and test suite).
+    package = pkgs.tor.overrideAttrs (old: rec {
+      version = "0.4.9.11";
+      src = pkgs.fetchurl {
+        url = "https://dist.torproject.org/tor-${version}.tar.gz";
+        hash = "sha256-LmwXIBGMgSrPAHn9R8+Rtr+rpddmwyHE09KijWoRqO0=";
+      };
+    });
     settings = {
       HiddenServiceDir = "/var/lib/tor/hidden_service";
       HiddenServicePort = [ "443 127.0.0.1:443" ];
@@ -277,7 +288,7 @@ in
     curl
     htop
     vim
-    tor
+    config.services.tor.package  # same Tor as the daemon (0.4.9 override above), not the pinned 0.4.8
     jq
     openssl
     python3

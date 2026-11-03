@@ -17,6 +17,8 @@
 #   SP_BUILD_MODE=download|build  — skip ISO source prompt
 #   SP_TOR_KEY=/path/to/key       — use custom Tor key (empty = generate new)
 #   SP_VM_ACTION=start|reinstall  — skip existing-VM prompt
+#   SP_VM_MEMORY=<MiB>            — VM RAM (default 4096). nixos-install builds the whole system INSIDE the
+#                                   live ISO (RAM-backed root); a 2048 MiB guest thrashes/livelocks (peak seen ~2.5 GiB).
 set -e
 
 # ── Colors ──────────────────────────────────────────────────────────────────
@@ -29,7 +31,7 @@ NC='\033[0m'
 
 # ── Configuration ───────────────────────────────────────────────────────────
 VM_NAME="SelfPrivacy-Tor-Test"
-VM_MEMORY=2048
+VM_MEMORY=${SP_VM_MEMORY:-4096}
 VM_CPUS=2
 VM_DISK_SIZE=10240
 SSH_PORT=2222
