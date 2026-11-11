@@ -749,7 +749,10 @@ EOFLAKE
         };
         modules = [
           (import ./nixos/selfprivacy-https-core.nix)
+          ./nixos/sp-install-key.nix
           ({ modulesPath, pkgs, lib, ... }: {
+            # an `authorized_keys` file next to flake.nix (copied from the stick at install time) = SSH by that key only
+            spInstallKey.installed = true;
             imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
             system.stateVersion = "25.11";
             networking.hostName = "selfprivacy-https";
@@ -798,8 +801,11 @@ EOFLAKE
         inherit system;
         modules = [
           selfprivacyTorModule
+          ./nixos/sp-install-key.nix
           ({ modulesPath, ... }: {
             imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
+            # an `authorized_keys` file next to flake.nix (copied from the stick at install time) = SSH by that key only
+            spInstallKey.installed = true;
             boot.loader.grub.enable = true;
             boot.loader.grub.device = "/dev/sda";
             fileSystems."/" = {
@@ -816,7 +822,11 @@ EOFLAKE
         inherit system;
         modules = [
           "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+          ./nixos/sp-install-key.nix
           ({ pkgs, lib, modulesPath, ... }: {
+            # A stick written by dev-dashboard's USB chain carries that install's public key at /sp/authorized_keys:
+            # the live installer then trusts only that key over SSH (nixos/sp-install-key.nix).
+            spInstallKey.iso = true;
             # Include the selfprivacy flake config in the ISO
             isoImage.contents = [
               {
